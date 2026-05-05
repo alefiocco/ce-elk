@@ -1376,9 +1376,17 @@ export default function AdminApp({ user }) {
       .order('mese',{ascending:false}).limit(24)
       .then(({data}) => setMesiPubblicati(data||[]));
   }, [publishMsg]);
-  const [mese, setMese] = useState(()=>{
-    const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  const [tipoPeriodo, setTipoPeriodo] = useState("mensile");
+  const [dataInizio, setDataInizio] = useState(() => {
+    const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-01`;
   });
+  const [dataFine, setDataFine] = useState(() => {
+    const d=new Date();
+    const last = new Date(d.getFullYear(), d.getMonth()+1, 0).getDate();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(last).padStart(2,"0")}`;
+  });
+  // mese derivato da dataFine per compatibilità
+  const mese = dataFine ? dataFine.substring(0,7) : "";
   const fileRef = useRef();
   const xlsxRef = useRef();
   const annoPrecRef = useRef(null);
@@ -1462,12 +1470,13 @@ export default function AdminApp({ user }) {
   }, [extraMapping]);
 
   function handleExportJSON() {
-    const meseFmt2 = mese
-      ? new Date(mese+"-01").toLocaleDateString("it-IT",{month:"long",year:"numeric"})
-      : mese;
+    const label = meseFmt();
     const payload = {
       mese,
-      label: meseFmt2,
+      label,
+      tipo: tipoPeriodo,
+      data_inizio: dataInizio,
+      data_fine: dataFine,
       dati_ce: gruppiRaw,
       dati_anno_prec: gruppiAnnoPrec,
       dati_bilancio: gruppiBilancio,
@@ -1507,7 +1516,7 @@ export default function AdminApp({ user }) {
         ? await sb.from('mesi').update(payload).eq('id',existing.id)
         : await sb.from('mesi').insert(payload);
       if (error) throw error;
-      setPublishMsg({ok:true, msg:`✓ ${meseFmt2} pubblicato. Il cliente può ora visualizzarlo.`});
+      setPublishMsg({ok:true, msg:`✓ ${label} pubblicato. Il cliente può ora visualizzarlo.`});
     } catch(err) {
       setPublishMsg({ok:false, msg:'Errore: '+(err.message||JSON.stringify(err))});
     }
@@ -1552,7 +1561,15 @@ export default function AdminApp({ user }) {
   const valsBil = (tuttiBilancio[activeLocale]  || tuttiBilancio["tot"]).vals;
   const ricaviMese = Math.abs(vals[100] || 0);
   const pct = (v) => ricaviMese > 0 ? ((v / ricaviMese) * 100).toFixed(1) + "%" : "—";
-  const meseFmt = mese ? new Date(mese+"-01").toLocaleDateString("it-IT",{month:"long",year:"numeric"}) : "—";
+  const meseFmt = () => {
+    if (!dataInizio || !dataFine) return "";
+    if (tipoPeriodo === "mensile") {
+      return new Date(dataFine+"T12:00:00").toLocaleDateString("it-IT",{month:"long",year:"numeric"});
+    }
+    const ini = new Date(dataInizio+"T12:00:00").toLocaleDateString("it-IT",{month:"short"});
+    const fin = new Date(dataFine+"T12:00:00").toLocaleDateString("it-IT",{month:"short",year:"numeric"});
+    return ini+"–"+fin;
+  };
   const nRicorrenti = extra.filter(e=>e.tipo==="ricorrente"||e.tipo==="budget").length;
   const nGeneriche  = extra.filter(e=>!e.tipo).length;
 
