@@ -1,9 +1,11 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, dynamic } from 'react'
 import { getSupabase } from '@/lib/supabase'
-import LoginPage from '@/components/LoginPage'
-import AdminApp  from '@/components/AdminApp'
-import ClientApp from '@/components/ClientApp'
+import dynamic_import from 'next/dynamic'
+
+const LoginPage = dynamic_import(() => import('@/components/LoginPage'), { ssr: false })
+const AdminApp  = dynamic_import(() => import('@/components/AdminApp'),  { ssr: false })
+const ClientApp = dynamic_import(() => import('@/components/ClientApp'), { ssr: false })
 
 export default function Home() {
   const [state,   setState]   = useState('loading')
@@ -50,7 +52,6 @@ export default function Home() {
     return () => { mounted = false; subscription.unsubscribe() }
   }, [])
 
-  // Callback da LoginPage: login già avvenuto, ruolo già caricato
   function handleLogin(user, ruolo) {
     setUserObj(user)
     setState(ruolo === 'admin' ? 'admin' : 'cliente')
@@ -68,7 +69,7 @@ export default function Home() {
   )
 
   if (state === 'login')   return <LoginPage onLogin={handleLogin} />
-  if (state === 'admin')   return <AdminApp   user={userObj} />
-  if (state === 'cliente') return <ClientApp  user={userObj} />
+  if (state === 'admin')   return <AdminApp  user={userObj} />
+  if (state === 'cliente') return <ClientApp user={userObj} />
   return <LoginPage onLogin={handleLogin} />
 }
