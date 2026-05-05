@@ -2,12 +2,6 @@
 import { useState } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
-const C = {
-  bg:'#0f1117', surface:'#181c27', border:'#2a3050',
-  accent:'#4f8ef7', text:'#e8ecf5', textMid:'#8b95b0',
-  red:'#f76b6b', redDim:'#3d1010',
-}
-
 export default function LoginPage({ onLogin }) {
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
@@ -16,92 +10,119 @@ export default function LoginPage({ onLogin }) {
 
   async function handleLogin(e) {
     e.preventDefault()
-    setLoading(true)
-    setError(null)
-
+    setLoading(true); setError(null)
     try {
       const sb = getSupabase()
       const { data, error: authError } = await sb.auth.signInWithPassword({ email, password })
-
-      if (authError) {
-        setError('Credenziali non valide. Riprova.')
-        setLoading(false)
-        return
-      }
-
-      if (!data?.user) {
-        setError('Errore di autenticazione. Riprova.')
-        setLoading(false)
-        return
-      }
-
-      // Carica ruolo direttamente dopo il login
-      const { data: profile, error: profileError } = await sb
-        .from('profiles')
-        .select('ruolo')
-        .eq('id', data.user.id)
-        .single()
-
-      if (profileError || !profile) {
-        setError('Errore nel caricamento del profilo. Contatta il commercialista.')
-        setLoading(false)
-        return
-      }
-
-      // Passa il risultato al parent tramite callback
-      if (onLogin) {
-        onLogin(data.user, profile.ruolo)
-      } else {
-        window.location.reload()
-      }
-
-    } catch (err) {
+      if (authError) { setError('Credenziali non valide.'); setLoading(false); return }
+      if (!data?.user) { setError('Errore autenticazione.'); setLoading(false); return }
+      const { data: profile, error: pe } = await sb.from('profiles').select('ruolo').eq('id', data.user.id).single()
+      if (pe || !profile) { setError('Profilo non trovato.'); setLoading(false); return }
+      if (onLogin) onLogin(data.user, profile.ruolo)
+      else window.location.reload()
+    } catch(err) {
       setError('Errore di connessione: ' + err.message)
       setLoading(false)
     }
   }
 
   return (
-    <div style={{ minHeight:'100vh', background:C.bg, display:'flex',
-      alignItems:'center', justifyContent:'center',
-      fontFamily:"'IBM Plex Mono','Courier New',monospace" }}>
-      <div style={{ background:C.surface, border:`1px solid ${C.border}`,
-        borderRadius:12, padding:36, width:'min(400px,92vw)',
-        boxShadow:'0 24px 80px #000c' }}>
-        <div style={{ textAlign:'center', marginBottom:28 }}>
-          <div style={{ fontSize:10, color:'#4a5270', letterSpacing:'0.15em', marginBottom:6 }}>
-            CONTO ECONOMICO RICLASSIFICATO
+    <div style={{
+      minHeight: '100vh',
+      background: 'var(--bg)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: 'var(--font-ui)',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      {/* Background grid */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        backgroundImage: 'linear-gradient(rgba(59,130,246,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.03) 1px, transparent 1px)',
+        backgroundSize: '48px 48px',
+        maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 80%)',
+      }}/>
+      {/* Glow */}
+      <div style={{
+        position: 'absolute', top: '30%', left: '50%', transform: 'translate(-50%,-50%)',
+        width: 600, height: 300,
+        background: 'radial-gradient(ellipse, rgba(59,130,246,0.08) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }}/>
+
+      <div style={{ position: 'relative', width: 'min(420px, 92vw)' }}>
+        {/* Logo / Header */}
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            width: 48, height: 48, borderRadius: 12,
+            background: 'var(--blue-dim)',
+            border: '1px solid rgba(59,130,246,0.2)',
+            marginBottom: 16,
+            fontSize: 22,
+          }}>📊</div>
+          <div style={{ fontSize: 11, fontWeight: 500, letterSpacing: '0.15em', color: 'var(--text-03)', textTransform: 'uppercase', marginBottom: 6 }}>
+            Studio FNP
           </div>
-          <div style={{ fontSize:22, fontWeight:700, color:C.text }}>Accedi</div>
+          <h1 style={{ fontSize: 24, fontWeight: 600, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+            CE Riclassificato
+          </h1>
         </div>
-        <form onSubmit={handleLogin}>
-          <div style={{ marginBottom:14 }}>
-            <label style={{ color:C.textMid, fontSize:11, display:'block', marginBottom:4 }}>Email</label>
-            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} required autoFocus
-              style={{ width:'100%', background:'#1e2334', border:`1px solid ${C.border}`,
-                borderRadius:6, padding:'9px 12px', color:C.text, fontSize:13,
-                outline:'none', boxSizing:'border-box' }}/>
-          </div>
-          <div style={{ marginBottom:20 }}>
-            <label style={{ color:C.textMid, fontSize:11, display:'block', marginBottom:4 }}>Password</label>
-            <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required
-              style={{ width:'100%', background:'#1e2334', border:`1px solid ${C.border}`,
-                borderRadius:6, padding:'9px 12px', color:C.text, fontSize:13,
-                outline:'none', boxSizing:'border-box' }}/>
-          </div>
-          {error && (
-            <div style={{ background:C.redDim, border:'1px solid #f76b6b44',
-              borderRadius:6, padding:'8px 12px', color:C.red, fontSize:11, marginBottom:16 }}>
-              {error}
+
+        {/* Card */}
+        <div style={{
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-xl)',
+          padding: '32px',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+        }}>
+          <p style={{ fontSize: 13, color: 'var(--text-02)', marginBottom: 24 }}>
+            Accedi per visualizzare il conto economico
+          </p>
+
+          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-03)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Email
+              </label>
+              <input className="input" type="email" value={email}
+                onChange={e=>setEmail(e.target.value)} required autoFocus
+                placeholder="nome@esempio.it"/>
             </div>
-          )}
-          <button type="submit" disabled={loading}
-            style={{ width:'100%', background:C.accent, border:'none',
-              borderRadius:7, padding:'11px', color:'#fff', fontSize:13, fontWeight:700,
-              cursor:loading?'wait':'pointer', opacity:loading?0.7:1 }}>
-            {loading ? 'Accesso in corso…' : 'Accedi'}
-          </button>
-        </form>
+
+            <div>
+              <label style={{ display: 'block', fontSize: 11, fontWeight: 500, color: 'var(--text-03)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Password
+              </label>
+              <input className="input" type="password" value={password}
+                onChange={e=>setPassword(e.target.value)} required
+                placeholder="••••••••"/>
+            </div>
+
+            {error && (
+              <div className="status-bar error">
+                <span>⚠</span> {error}
+              </div>
+            )}
+
+            <button type="submit" className="btn btn-primary" disabled={loading}
+              style={{ width: '100%', justifyContent: 'center', padding: '10px', fontSize: 13, marginTop: 4 }}>
+              {loading ? (
+                <>
+                  <div style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTop: '2px solid white', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }}/>
+                  Accesso in corso…
+                </>
+              ) : 'Accedi'}
+            </button>
+          </form>
+        </div>
+
+        <p style={{ textAlign: 'center', fontSize: 11, color: 'var(--text-04)', marginTop: 20 }}>
+          Accesso riservato · Studio FNP
+        </p>
       </div>
     </div>
   )
