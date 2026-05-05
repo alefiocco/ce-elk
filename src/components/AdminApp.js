@@ -813,95 +813,345 @@ function SaveBar({ onClose, onSave }) {
 const VOCI_CE_INPUT = VOCI_CE.filter(v => v.tipo === "input" && typeof v.cod === "number");
 const CC_OPTIONS = [{cc:5,label:"5 – Indiretti"},{cc:10,label:"10 – Via 4"},{cc:20,label:"20 – Via Capp"},{cc:30,label:"30 – New"}];
 
-function MappingPanel({ onClose, extraMapping, setExtraMapping }) {
-  const [text, setText] = useState(() => JSON.stringify(extraMapping, null, 2));
-  const [err, setErr] = useState(null);
+function MappingPanel({ onClose, extraMapping, setExtraMapping, gruppiRaw }) {
+  const [tab, setTab] = useState("modifica"); // modifica | aggiungi | nonmappati
+  const [entries, setEntries] = useState(() => {
+    // Merge PIANO_CONTI base + extraMapping
+    const all = {};
+    Object.entries(PIANO_CONTI).forEach(([c,v])=>{ all[c]={...v, isBase:true}; });
+    Object.entries(extraMapping).forEach(([c,v])=>{ all[c]={...v, isBase:false}; });
+    return all;
+  });
+  const [search, setSearch] = useState("");
+  const [editConto, setEditConto] = useState(null);
+  const [newConto, setNewConto] = useState({conto:"", cod:200, cc:10});
   const [saved, setSaved] = useState(false);
 
-  function handleSave() {
-    try {
-      const parsed = JSON.parse(text);
-      setExtraMapping(parsed);
-      setErr(null);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch(e) {
-      setErr("JSON non valido: " + e.message);
+  const vociInput = VOCI_CE.filter(v=>v.tipo==="input"&&typeof v.cod==="number");
+  const ccOpts = [{cc:5,label:"5 – Indiretti"},{cc:10,label:"10 – Via 4"},{cc:20,label:"20 – Via Capp"},{cc:30,label:"30 – New"}];
+  const voceLabel = cod => vociInput.find(v=>v.cod===cod)?.label || String(cod);
+
+  // Conti non mappati: presenti nel TXT ma non in PIANO_CONTI + extraMapping
+  const merged = {...PIANO_CONTI, ...extraMapping};
+  const nonMappati = gruppiRaw
+    ? [] // calcolati sotto
+    : [];
+
+  // Ricava i conti non mappati dal testo raw del bilancio (via window per semplicità)
+  const [rawContiNonMappati, setRawContiNonMappati] = useState([]);
+  useEffect(() => {
+    // Leggi i conti dal txtContentRef se disponibile
+    const ref = window._txtContentRef;
+    if (!ref) return;
+    const lines = ref.split(/
+?
+/).filter(l=>l.trim());
+    const nonMapp = [];
+    for (const line of lines) {
+      const parts = line.split(/	/).map(p=>p.trim());
+      if (parts.length < 4) continue;
+      const conto = parts[0].replace(/[="'\s]/g,"");
+      if (!conto || !/^\d+$/.test(conto)) continue;
+      const spce = parts[3]||"";
+      if (spce.toUpperCase().includes("SP")) continue;
+      if (!merged[conto]) {
+        const desc = parts[2]||"";
+        if (!nonMapp.find(x=>x.conto===conto))
+          nonMapp.push({conto, descrizione:desc});
+      }
     }
+    setRawContiNonMappati(nonMapp.sort((a,b)=>a.conto.localeCompare(b.conto)));
+  }, [tab]);
+
+  function saveMapping(c, cod, cc) {
+    setExtraMapping(m => ({...m, [c]:{cod,cc}}));
+    setEntries(e => ({...e, [c]:{cod,cc,isBase:false}}));
   }
 
-  const vociInput = VOCI_CE.filter(v=>v.tipo==="input"&&typeof v.cod==="number");
-  const ccOpts = [{cc:5,l:"5-Indiretti"},{cc:10,l:"10-Via4"},{cc:20,l:"20-ViaCapp"},{cc:30,l:"30-New"}];
+  function deleteMapping(c) {
+    setExtraMapping(m => {const n={...m}; delete n[c]; return n;});
+    setEntries(e => {
+      const n={...e};
+      if (PIANO_CONTI[c]) n[c]={...PIANO_CONTI[c],isBase:true};
+      else delete n[c];
+      return n;
+    });
+  }
+
+  function addNew() {
+    if (!newConto.conto.trim()) return;
+    saveMapping(newConto.conto.trim(), newConto.cod, newConto.cc);
+    setSaved(true);
+    setTimeout(()=>setSaved(false),1500);
+    setNewConto({conto:"",cod:200,cc:10});
+  }
+
+  const allEntries = Object.entries(entries)
+    .filter(([,v])=>v.cod<1000)
+    .sort((a,b)=>a[0].localeCompare(b[0]));
+
+  const filtered = search.trim()
+    ? allEntries.filter(([c,v])=>
+        c.includes(search)||String(v.cod).includes(search)||
+        voceLabel(v.cod).toLowerCase().includes(search.toLowerCase()))
+    : allEntries;
+
+  const tabStyle = (id) => ({
+    padding:"6px 14px", borderRadius:6, fontSize:11, cursor:"pointer",
+    fontWeight:tab===id?700:400,
+    border:`1px solid ${tab===id?C.accent:C.border}`,
+    background:tab===id?C.accentDim:"none",
+    color:tab===id?C.accent:C.textMid,
+  });
 
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"#000b",zIndex:200,
       display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div onClick={e=>e.stopPropagation()} style={{background:C.surface,border:`1px solid ${C.border}`,
-        borderRadius:12,width:"min(700px,96vw)",maxHeight:"85vh",display:"flex",
+        borderRadius:12,width:"min(820px,97vw)",maxHeight:"88vh",display:"flex",
         flexDirection:"column",overflow:"hidden",boxShadow:"0 30px 100px #000a"}}>
-        <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,
-          display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+
+        {/* Header */}
+        <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,flexShrink:0,
+          display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div>
-            <div style={{color:C.textDim,fontSize:9,letterSpacing:"0.1em",marginBottom:2}}>GESTIONE PIANO DEI CONTI</div>
-            <div style={{color:C.text,fontWeight:700,fontSize:14}}>🗂 Mappatura conti extra</div>
+            <div style={{color:C.textDim,fontSize:9,letterSpacing:"0.1em",marginBottom:4}}>GESTIONE PIANO DEI CONTI</div>
+            <div style={{display:"flex",gap:6}}>
+              <button style={tabStyle("modifica")} onClick={()=>setTab("modifica")}>📋 Mappatura</button>
+              <button style={tabStyle("aggiungi")} onClick={()=>setTab("aggiungi")}>+ Nuovo conto</button>
+              <button style={{...tabStyle("nonmappati"),
+                borderColor:rawContiNonMappati.length>0&&tab!=="nonmappati"?C.amber:undefined,
+                color:rawContiNonMappati.length>0&&tab!=="nonmappati"?C.amber:undefined}}
+                onClick={()=>setTab("nonmappati")}>
+                ⚠ Non mappati {rawContiNonMappati.length>0?`(${rawContiNonMappati.length})`:""}
+              </button>
+            </div>
           </div>
           <button onClick={onClose} style={{background:"none",border:`1px solid ${C.border}`,
             color:C.textMid,borderRadius:6,width:28,height:28,cursor:"pointer",fontSize:14}}>×</button>
         </div>
-        <div style={{padding:"12px 20px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-          <div style={{color:C.textDim,fontSize:10,marginBottom:8,lineHeight:1.5}}>
-            Formato JSON: <span style={{color:C.accent,fontFamily:"monospace"}}>{"{"}"CONTO": {"{"}cod: CODGEST, cc: CENTROCOSTO{"}"}{"}"}
-            </span> — CC: 5=Indiretti, 10=Via4, 20=ViaCapp, 30=New
+
+        {/* TAB: MAPPATURA */}
+        {tab==="modifica" && (<>
+          <div style={{padding:"10px 20px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+            <input style={{...inputStyle,width:"100%"}}
+              placeholder="Cerca per conto, codice gestionale o voce CE…"
+              value={search} onChange={e=>setSearch(e.target.value)}/>
+            <div style={{color:C.textDim,fontSize:9,marginTop:5}}>
+              {filtered.length} conti · {allEntries.filter(([,v])=>!v.isBase).length} personalizzati
+            </div>
           </div>
-          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-            <select onChange={e=>{
-              const[cod,cc]=e.target.value.split(",").map(Number);
-              if(!cod)return;
-              const conto=prompt("Numero conto contabile:");
-              if(!conto)return;
-              const nm={...JSON.parse(text||"{}"),[conto]:{cod,cc}};
-              setText(JSON.stringify(nm,null,2));
-              e.target.value="";
-            }} defaultValue=""
-              style={{...{background:C.surfaceHigh,border:`1px solid ${C.border}`,
-                borderRadius:6,padding:"5px 8px",color:C.text,fontSize:10}}}>
-              <option value="">+ Aggiungi conto</option>
-              {vociInput.map(v=>ccOpts.map(o=>(
-                <option key={`${v.cod},${o.cc}`} value={`${v.cod},${o.cc}`}>
-                  {v.cod} – {v.label.substring(0,25)} / CC{o.l}
-                </option>
-              )))}
-            </select>
+          <div style={{overflowY:"auto",flex:1}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:C.surfaceHigh,position:"sticky",top:0}}>
+                  {["Conto","Voce CE","Centro di costo",""].map((h,i)=>(
+                    <th key={i} style={{padding:"7px 14px",textAlign:"left",color:C.textDim,
+                      fontSize:9,fontWeight:700,borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(([conto,v])=>{
+                  const isEditing = editConto===conto;
+                  const isExtra = !v.isBase;
+                  return (
+                    <tr key={conto}
+                      style={{borderBottom:`1px solid ${C.border}18`,
+                        background:isExtra?`${C.amber}07`:"transparent"}}
+                      onMouseEnter={e=>e.currentTarget.style.background=isExtra?`${C.amber}0d`:C.surfaceHigh}
+                      onMouseLeave={e=>e.currentTarget.style.background=isExtra?`${C.amber}07`:"transparent"}>
+                      <td style={{padding:"7px 14px",fontFamily:"monospace",fontSize:11,
+                        color:isExtra?C.amber:C.accent}}>
+                        {conto}{isExtra&&<span style={{fontSize:8,marginLeft:4}}>✎</span>}
+                      </td>
+                      <td style={{padding:"7px 14px"}}>
+                        {isEditing ? (
+                          <select style={{...selectStyle,width:"auto",padding:"3px 6px",fontSize:11}}
+                            defaultValue={v.cod}
+                            onChange={el=>saveMapping(conto,parseInt(el.target.value),
+                              extraMapping[conto]?.cc||v.cc)}>
+                            {vociInput.map(vi=>(
+                              <option key={vi.cod} value={vi.cod}>{vi.cod} – {vi.label.substring(0,30)}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span style={{fontSize:11,color:C.text}}>{v.cod} – {voceLabel(v.cod)}</span>
+                        )}
+                      </td>
+                      <td style={{padding:"7px 14px"}}>
+                        {isEditing ? (
+                          <select style={{...selectStyle,width:"auto",padding:"3px 6px",fontSize:11}}
+                            defaultValue={v.cc}
+                            onChange={el=>saveMapping(conto,
+                              extraMapping[conto]?.cod||v.cod, parseInt(el.target.value))}>
+                            {ccOpts.map(o=><option key={o.cc} value={o.cc}>{o.label}</option>)}
+                          </select>
+                        ) : (
+                          <span style={{fontSize:11,color:C.textMid}}>
+                            {ccOpts.find(o=>o.cc===v.cc)?.label||v.cc}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{padding:"7px 10px",textAlign:"right",whiteSpace:"nowrap"}}>
+                        <button onClick={()=>setEditConto(editConto===conto?null:conto)}
+                          style={{background:"none",border:`1px solid ${C.border}`,borderRadius:5,
+                            color:isEditing?C.green:C.textMid,padding:"3px 9px",cursor:"pointer",fontSize:10}}>
+                          {isEditing?"✓ ok":"✎"}
+                        </button>
+                        {isExtra && (
+                          <button onClick={()=>deleteMapping(conto)}
+                            style={{background:"none",border:`1px solid ${C.red}44`,borderRadius:5,
+                              color:C.red,padding:"3px 9px",cursor:"pointer",fontSize:10,marginLeft:5}}>
+                            ×
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
-        <div style={{flex:1,overflow:"auto",padding:"12px 20px"}}>
-          <textarea value={text} onChange={e=>setText(e.target.value)}
-            style={{width:"100%",height:"280px",background:C.surfaceHigh,
-              border:`1px solid ${err?C.red:C.border}`,borderRadius:6,
-              padding:"10px",color:C.text,fontSize:11,fontFamily:"monospace",
-              outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
-          {err && <div style={{color:C.red,fontSize:10,marginTop:6}}>{err}</div>}
-        </div>
-        <div style={{padding:"12px 20px",borderTop:`1px solid ${C.border}`,
-          display:"flex",gap:9,flexShrink:0}}>
-          <button onClick={()=>setText("{}")} style={{flex:1,padding:"8px",background:"none",
-            border:`1px solid ${C.border}`,borderRadius:7,color:C.textMid,cursor:"pointer",fontSize:11}}>
-            Reset
-          </button>
-          <button onClick={onClose} style={{flex:1,padding:"8px",background:"none",
-            border:`1px solid ${C.border}`,borderRadius:7,color:C.textMid,cursor:"pointer",fontSize:11}}>
-            Annulla
-          </button>
-          <button onClick={handleSave} style={{flex:2,padding:"8px",
-            background:saved?C.green:C.accent,border:"none",
-            borderRadius:7,color:"#fff",cursor:"pointer",fontSize:11,fontWeight:700}}>
-            {saved ? "✓ Salvato!" : "✓ Applica"}
-          </button>
+        </>)}
+
+        {/* TAB: AGGIUNGI */}
+        {tab==="aggiungi" && (
+          <div style={{padding:"20px",flex:1,overflowY:"auto"}}>
+            <div style={{color:C.textDim,fontSize:10,marginBottom:16,lineHeight:1.5}}>
+              Aggiungi un nuovo conto contabile alla mappatura. Sarà attivo immediatamente
+              al prossimo caricamento del TXT.
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"140px 1fr 1fr",gap:12,marginBottom:16}}>
+              <Field label="Conto contabile">
+                <input style={inputStyle} placeholder="Es. 804999"
+                  value={newConto.conto}
+                  onChange={e=>setNewConto(n=>({...n,conto:e.target.value}))}/>
+              </Field>
+              <Field label="Codice gestionale">
+                <select style={selectStyle} value={newConto.cod}
+                  onChange={e=>setNewConto(n=>({...n,cod:parseInt(e.target.value)}))}>
+                  {vociInput.map(v=>(
+                    <option key={v.cod} value={v.cod}>{v.cod} – {v.label}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Centro di costo">
+                <select style={selectStyle} value={newConto.cc}
+                  onChange={e=>setNewConto(n=>({...n,cc:parseInt(e.target.value)}))}>
+                  {ccOpts.map(o=><option key={o.cc} value={o.cc}>{o.label}</option>)}
+                </select>
+              </Field>
+            </div>
+            <button onClick={addNew} disabled={!newConto.conto.trim()} style={{
+              padding:"10px 24px",background:saved?C.green:C.accent,border:"none",
+              borderRadius:7,color:"#fff",cursor:"pointer",fontSize:13,fontWeight:700,
+              opacity:!newConto.conto.trim()?0.4:1}}>
+              {saved?"✓ Aggiunto!":"+ Aggiungi conto"}
+            </button>
+          </div>
+        )}
+
+        {/* TAB: NON MAPPATI */}
+        {tab==="nonmappati" && (
+          <div style={{flex:1,overflowY:"auto"}}>
+            {rawContiNonMappati.length===0 ? (
+              <div style={{padding:"40px",textAlign:"center"}}>
+                <div style={{fontSize:32,marginBottom:12}}>✅</div>
+                <div style={{color:C.text,fontSize:13,marginBottom:6}}>
+                  Tutti i conti CE del TXT sono mappati
+                </div>
+                <div style={{color:C.textDim,fontSize:10}}>
+                  {window._txtContentRef
+                    ? "Nessun conto senza mappatura trovato nell'ultimo TXT caricato."
+                    : "Carica un file TXT bilancio per vedere i conti non mappati."}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{padding:"10px 20px",borderBottom:`1px solid ${C.border}`,
+                  background:`${C.amber}08`,flexShrink:0}}>
+                  <div style={{color:C.amber,fontSize:11,fontWeight:700}}>
+                    ⚠ {rawContiNonMappati.length} conti trovati nel TXT senza mappatura
+                  </div>
+                  <div style={{color:C.textDim,fontSize:9,marginTop:3}}>
+                    Questi conti vengono ignorati nel calcolo del CE. Mappali per includerli.
+                  </div>
+                </div>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead>
+                    <tr style={{background:C.surfaceHigh,position:"sticky",top:0}}>
+                      {["Conto","Descrizione TXT","Voce CE","Centro di costo",""].map((h,i)=>(
+                        <th key={i} style={{padding:"7px 14px",textAlign:"left",color:C.textDim,
+                          fontSize:9,fontWeight:700,borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rawContiNonMappati.map(({conto,descrizione})=>{
+                      const isMapped = !!extraMapping[conto];
+                      return (
+                        <NonMappatoRow key={conto} conto={conto} descrizione={descrizione}
+                          isMapped={isMapped} vociInput={vociInput} ccOpts={ccOpts}
+                          onMap={(cod,cc)=>{saveMapping(conto,cod,cc);}}/>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </div>
+        )}
+
+        <div style={{padding:"9px 20px",borderTop:`1px solid ${C.border}`,
+          color:C.textDim,fontSize:9,flexShrink:0}}>
+          Le modifiche sono attive subito · i conti base (grigio) non possono essere eliminati ma solo modificati
         </div>
       </div>
     </div>
   );
 }
+
+function NonMappatoRow({ conto, descrizione, isMapped, vociInput, ccOpts, onMap }) {
+  const [cod, setCod] = useState(200);
+  const [cc,  setCc]  = useState(10);
+  const [done, setDone] = useState(isMapped);
+
+  return (
+    <tr style={{borderBottom:`1px solid ${C.border}18`,
+      background:done?`${C.green}07`:"transparent"}}
+      onMouseEnter={e=>e.currentTarget.style.background=done?`${C.green}0d`:C.surfaceHigh}
+      onMouseLeave={e=>e.currentTarget.style.background=done?`${C.green}07`:"transparent"}>
+      <td style={{padding:"7px 14px",fontFamily:"monospace",fontSize:11,
+        color:done?C.green:C.amber}}>{conto}</td>
+      <td style={{padding:"7px 14px",fontSize:11,color:C.textMid,maxWidth:200}}>{descrizione}</td>
+      <td style={{padding:"6px 10px"}}>
+        <select style={{...selectStyle,padding:"4px 6px",fontSize:10}}
+          value={cod} onChange={e=>setCod(parseInt(e.target.value))}>
+          {vociInput.map(v=><option key={v.cod} value={v.cod}>{v.cod} – {v.label.substring(0,28)}</option>)}
+        </select>
+      </td>
+      <td style={{padding:"6px 10px"}}>
+        <select style={{...selectStyle,padding:"4px 6px",fontSize:10}}
+          value={cc} onChange={e=>setCc(parseInt(e.target.value))}>
+          {ccOpts.map(o=><option key={o.cc} value={o.cc}>{o.label}</option>)}
+        </select>
+      </td>
+      <td style={{padding:"6px 10px"}}>
+        {done ? (
+          <span style={{color:C.green,fontSize:11}}>✓ mappato</span>
+        ) : (
+          <button onClick={()=>{onMap(cod,cc);setDone(true);}}
+            style={{background:C.accent,border:"none",borderRadius:5,color:"#fff",
+              padding:"4px 10px",cursor:"pointer",fontSize:10,fontWeight:700}}>
+            Mappa
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 
 function CespitiPanel({ cespiti, setCespiti, allocConf, setAllocConf, onClose, gruppiRaw }) {
   const percRicavi = calcolaPercRicavi(gruppiRaw);
@@ -1091,10 +1341,28 @@ export default function AdminApp({ user }) {
   const [activeLocale, setActiveLocale] = useState("tot");
   const [cespiti, setCespiti] = useState({10:"", 20:"", 30:""});
   const [allocConf, setAllocConf] = useState({});
-  const [extraMapping, setExtraMapping] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('ce_extraMapping')||'{}'); } catch { return {}; }
-  });
-  const [showMapping, setShowMapping] = useState(false);
+  const [extraMapping, setExtraMapping] = useState({});
+  const [showMapping,  setShowMapping]  = useState(false);
+  const [configLoaded, setConfigLoaded] = useState(false);
+
+  // Carica config persistente da Supabase al mount
+  useEffect(() => {
+    async function loadConfig() {
+      try {
+        const { data } = await sb.from('config').select('*').eq('id','singleton').single();
+        if (data) {
+          if (data.mappatura_extra && Object.keys(data.mappatura_extra).length)
+            setExtraMapping(data.mappatura_extra);
+          if (data.alloc_conf && Object.keys(data.alloc_conf).length)
+            setAllocConf(data.alloc_conf);
+          if (data.cespiti && Object.keys(data.cespiti).length)
+            setCespiti(data.cespiti);
+        }
+      } catch(e) { console.warn('Config load error:', e); }
+      setConfigLoaded(true);
+    }
+    loadConfig();
+  }, []);
   const [publishing, setPublishing] = useState(false);
   const [publishMsg, setPublishMsg] = useState(null);
   const [mesiPubblicati, setMesiPubblicati] = useState([]);
@@ -1123,18 +1391,36 @@ export default function AdminApp({ user }) {
     const reader = new FileReader();
     reader.onload = e => {
       txtContentRef.current = e.target.result;
+      window._txtContentRef = e.target.result; // exposed for MappingPanel non-mapped detection
       const movimenti = parseTxt(e.target.result);
       setGruppiRaw(aggregaPerCodice(movimenti, extraMapping));
     };
     reader.readAsText(file,"UTF-8");
   },[]);  // extraMapping volutamente escluso: usiamo il ref sotto
 
+  // Salva extraMapping su Supabase quando cambia (solo dopo il caricamento iniziale)
   useEffect(() => {
-    try { localStorage.setItem('ce_extraMapping', JSON.stringify(extraMapping)); } catch {}
+    if (!configLoaded) return;
+    sb.from('config').upsert({id:'singleton', mappatura_extra:extraMapping, updated_at:new Date().toISOString()})
+      .catch(e => console.warn('Errore salvataggio mappatura:', e));
     if (txtContentRef.current) {
       setGruppiRaw(aggregaPerCodice(parseTxt(txtContentRef.current), extraMapping));
     }
-  }, [extraMapping]);
+  }, [extraMapping, configLoaded]);
+
+  // Salva allocConf su Supabase
+  useEffect(() => {
+    if (!configLoaded) return;
+    sb.from('config').upsert({id:'singleton', alloc_conf:allocConf, updated_at:new Date().toISOString()})
+      .catch(e => console.warn('Errore salvataggio coefficienti:', e));
+  }, [allocConf, configLoaded]);
+
+  // Salva cespiti su Supabase
+  useEffect(() => {
+    if (!configLoaded) return;
+    sb.from('config').upsert({id:'singleton', cespiti:cespiti, updated_at:new Date().toISOString()})
+      .catch(e => console.warn('Errore salvataggio cespiti:', e));
+  }, [cespiti, configLoaded]);
 
   const handleXlsx = useCallback(async (file) => {
     setPrimaNotaErr(null);
@@ -1594,7 +1880,7 @@ export default function AdminApp({ user }) {
       </div>
 
       {drillVoce && <DrillModal voce={drillVoce} gruppi={gruppi} primaNotaRaw={primaNotaRaw} onClose={()=>setDrillVoce(null)}/>}
-      {showMapping && <MappingPanel extraMapping={extraMapping} setExtraMapping={setExtraMapping} onClose={()=>setShowMapping(false)}/>}
+      {showMapping && <MappingPanel extraMapping={extraMapping} setExtraMapping={setExtraMapping} gruppiRaw={gruppiRaw} onClose={()=>setShowMapping(false)}/>}
       {showCoeff && <CespitiPanel cespiti={cespiti} setCespiti={setCespiti} allocConf={allocConf} setAllocConf={setAllocConf} gruppiRaw={gruppiRaw} onClose={()=>setShowCoeff(false)}/>}
       {showExtra && <ExtraModal onSave={ex=>setExtra(e=>[...e,ex])} onClose={()=>setShowExtra(false)}/>}
       {showRicorrenti && <RicorrentiPanel onSave={ex=>setExtra(e=>[...e,ex])} onClose={()=>setShowRicorrenti(false)}/>}
