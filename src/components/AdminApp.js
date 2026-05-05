@@ -13,14 +13,6 @@ const C = {
   purple:'#a78bfa',
   text:'#e8ecf5', textMid:'#8b95b0', textDim:'#4a5270',
 }
-const col = n => n>=0 ? C.green : C.red
-const inputStyle = {
-  width:'100%', background:'#1e2334', border:`1px solid #2a3050`,
-  borderRadius:6, padding:'7px 10px', color:'#e8ecf5', fontSize:12,
-  outline:'none', boxSizing:'border-box',
-}
-const selectStyle = {...inputStyle, fontSize:11}
-
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PIANO_CONTI = {
   "801300":{"cod":415,"cc":10}, "801400":{"cod":200,"cc":10}, "801601":{"cod":415,"cc":10}, "801700":{"cod":415,"cc":10}, "804220":{"cod":455,"cc":10}, "804400":{"cod":476,"cc":10}, "804450":{"cod":475,"cc":5}, "804508":{"cod":455,"cc":10},
