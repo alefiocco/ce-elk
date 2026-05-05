@@ -83,7 +83,13 @@ export default function AdminApp({ user }) {
     setPublishing(false)
   }
 
-  async function handleLogout() { await sb.auth.signOut() }
+  async function handleLogout() {
+    try {
+      await sb.auth.signOut()
+    } catch {}
+    // Forza reload pulito indipendentemente dall'esito
+    window.location.href = window.location.pathname
+  }
 
   const ce     = jsonData ? calcolaTuttiCE(jsonData.dati_ce || {}, jsonData.extra_scritture || [], jsonData.alloc_conf || {}, jsonData.cespiti || {}) : null
   const ceAP   = jsonData?.dati_anno_prec  && Object.keys(jsonData.dati_anno_prec).length  ? calcolaTuttiCE(jsonData.dati_anno_prec,  [], {}, {}) : null
