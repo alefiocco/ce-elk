@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getSupabase } from '@/lib/supabase'
+import CETable from './CETable'
 
 // ─── COLORS ──────────────────────────────────────────────────────────────────
 const C = {
