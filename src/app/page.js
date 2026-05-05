@@ -27,7 +27,6 @@ export default function Home() {
     }
 
     async function init() {
-      // Safety timeout
       const t = setTimeout(() => { if (mounted) setState('login') }, 8000)
       try {
         const { data: { session } } = await sb.auth.getSession()
@@ -46,11 +45,16 @@ export default function Home() {
     const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
       if (event === 'SIGNED_OUT' || !session) { setState('login'); setUserObj(null); return }
-      if (event === 'SIGNED_IN' && session) await loadRuolo(session.user)
     })
 
     return () => { mounted = false; subscription.unsubscribe() }
   }, [])
+
+  // Callback da LoginPage: login già avvenuto, ruolo già caricato
+  function handleLogin(user, ruolo) {
+    setUserObj(user)
+    setState(ruolo === 'admin' ? 'admin' : 'cliente')
+  }
 
   if (state === 'loading') return (
     <div style={{ minHeight:'100vh', background:'#0f1117', display:'flex',
@@ -63,8 +67,8 @@ export default function Home() {
     </div>
   )
 
-  if (state === 'login')   return <LoginPage />
+  if (state === 'login')   return <LoginPage onLogin={handleLogin} />
   if (state === 'admin')   return <AdminApp   user={userObj} />
   if (state === 'cliente') return <ClientApp  user={userObj} />
-  return <LoginPage />
+  return <LoginPage onLogin={handleLogin} />
 }
