@@ -843,9 +843,7 @@ function MappingPanel({ onClose, extraMapping, setExtraMapping, gruppiRaw }) {
     // Leggi i conti dal txtContentRef se disponibile
     const ref = window._txtContentRef;
     if (!ref) return;
-    const lines = ref.split(/
-?
-/).filter(l=>l.trim());
+   const lines = ref.split(/\r?\n/).filter(l=>l.trim());
     const nonMapp = [];
     for (const line of lines) {
       const parts = line.split(/	/).map(p=>p.trim());
