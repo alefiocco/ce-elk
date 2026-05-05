@@ -1364,6 +1364,9 @@ export default function AdminApp({ user }) {
   const [publishing, setPublishing] = useState(false);
   const [publishMsg, setPublishMsg] = useState(null);
   const [mesiPubblicati, setMesiPubblicati] = useState([]);
+  const [meseStorico, setMeseStorico] = useState(null);  // mese selezionato per visualizzazione
+  const [datiStorico, setDatiStorico] = useState(null);  // dati del mese selezionato
+  const [loadingStorico, setLoadingStorico] = useState(false);
   const sb = getSupabase();
   const txtContentRef = useRef(null);
 
@@ -1514,6 +1517,29 @@ export default function AdminApp({ user }) {
     window.location.href = window.location.pathname;
   }
 
+  async function loadMeseStorico(m) {
+    if (meseStorico?.id === m.id) { setMeseStorico(null); setDatiStorico(null); return; }
+    setMeseStorico(m);
+    setLoadingStorico(true);
+    setDatiStorico(null);
+    const { data } = await sb.from('mesi').select('*').eq('id', m.id).single();
+    setDatiStorico(data);
+    setLoadingStorico(false);
+  }
+
+  async function deleteMeseStorico(m) {
+    if (!window.confirm(`Eliminare definitivamente ${m.label||m.mese}? Questa operazione non è reversibile.`)) return;
+    const { error } = await sb.from('mesi').delete().eq('id', m.id);
+    if (error) {
+      alert('Errore eliminazione: ' + error.message);
+    } else {
+      setMeseStorico(null);
+      setDatiStorico(null);
+      setMesiPubblicati(p => p.filter(x => x.id !== m.id));
+      setPublishMsg({ ok: true, msg: `✓ ${m.label||m.mese} eliminato.` });
+    }
+  }
+
   const tuttiCE = calcolaTuttiCE(gruppiRaw, extra, allocConf, cespiti);
   const { vals, gruppi } = tuttiCE[activeLocale] || tuttiCE["tot"];
   const localeAttivo = LOCALI.find(l => l.id === activeLocale);
@@ -1624,11 +1650,6 @@ export default function AdminApp({ user }) {
             padding:"5px 10px",cursor:"pointer",fontSize:9}}>
             Esci
           </button>
-          <button onClick={handleLogout} style={{background:"none",
-            border:`1px solid ${C.border}`,borderRadius:5,color:C.textMid,
-            padding:"5px 10px",cursor:"pointer",fontSize:9}}>
-            Esci
-          </button>
 
         </div>
       </div>
@@ -1647,14 +1668,103 @@ export default function AdminApp({ user }) {
           </div>
         )}
         {mesiPubblicati.length>0 && (
-          <div style={{marginBottom:14,display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-            <span style={{color:C.textDim,fontSize:9}}>Già pubblicati:</span>
-            {mesiPubblicati.map(m=>(
-              <span key={m.id} style={{background:C.surfaceHigh,border:`1px solid ${C.border}`,
-                borderRadius:4,padding:"2px 8px",fontSize:9,color:C.textMid}}>
-                {m.label||m.mese}
-              </span>
-            ))}
+          <div style={{marginBottom:16}}>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:meseStorico?10:0}}>
+              <span style={{color:C.textDim,fontSize:10,marginRight:2}}>📅 Storico:</span>
+              {mesiPubblicati.map(m=>(
+                <button key={m.id} onClick={()=>loadMeseStorico(m)} style={{
+                  padding:"4px 12px",borderRadius:6,fontSize:11,cursor:"pointer",
+                  fontFamily:"var(--font-ui)",fontWeight:meseStorico?.id===m.id?700:400,
+                  border:`1px solid ${meseStorico?.id===m.id?C.accent:C.border}`,
+                  background:meseStorico?.id===m.id?C.accentDim:"none",
+                  color:meseStorico?.id===m.id?C.accent:C.textMid,
+                  transition:"all 0.15s"}}>
+                  {m.label||m.mese}
+                </button>
+              ))}
+              {meseStorico && (
+                <button onClick={()=>{setMeseStorico(null);setDatiStorico(null);}} style={{
+                  padding:"4px 10px",borderRadius:6,fontSize:10,cursor:"pointer",
+                  border:`1px solid ${C.border}`,background:"none",color:C.textDim}}>
+                  × chiudi
+                </button>
+              )}
+            </div>
+
+            {/* Vista storico mese selezionato */}
+            {meseStorico && (
+              <div style={{background:C.surfaceHigh,borderRadius:10,border:`1px solid ${C.border}`,
+                padding:"16px 20px",marginBottom:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:14,color:C.text}}>{meseStorico.label||meseStorico.mese}</div>
+                    <div style={{fontSize:10,color:C.textDim,marginTop:2}}>
+                      Pubblicato il {new Date(meseStorico.pubblicato_at).toLocaleDateString('it-IT')}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <span style={{color:C.textDim,fontSize:10}}>
+                      Ricarica un TXT con mese <span style={{fontFamily:"monospace",color:C.amber}}>{meseStorico.mese}</span> e ripubblica per sovrascrivere
+                    </span>
+                    <button onClick={()=>deleteMeseStorico(meseStorico)} style={{
+                      background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:6,
+                      color:C.red,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>
+                      🗑 Elimina
+                    </button>
+                  </div>
+                </div>
+
+                {loadingStorico && (
+                  <div style={{textAlign:"center",padding:"20px",color:C.textDim,fontSize:12}}>
+                    Caricamento…
+                  </div>
+                )}
+
+                {datiStorico && (() => {
+                  const ceS = calcolaTuttiCE(
+                    datiStorico.dati_ce||{}, datiStorico.extra_scritture||[],
+                    datiStorico.alloc_conf||{}, datiStorico.cespiti||{}
+                  );
+                  const ceLocaleS = ceS[activeLocale]||ceS['tot'];
+                  const ceAPS  = datiStorico.dati_anno_prec&&Object.keys(datiStorico.dati_anno_prec||{}).length
+                    ? calcolaTuttiCE(datiStorico.dati_anno_prec,[],{},{}) : null;
+                  const ceBilS = datiStorico.dati_bilancio&&Object.keys(datiStorico.dati_bilancio||{}).length
+                    ? calcolaTuttiCE(datiStorico.dati_bilancio,[],{},{}) : null;
+                  const vals = ceLocaleS.vals;
+                  const ricavi = Math.abs(vals[100]||0);
+                  const ebit = vals['EBIT']||0;
+                  const rn = vals['RN']||0;
+                  return (
+                    <div>
+                      {/* Mini metriche */}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+                        {[
+                          {label:"Ricavi",val:ricavi,color:C.accent},
+                          {label:"EBIT",val:ebit,color:ebit>=0?C.green:C.red},
+                          {label:"Risultato Netto",val:rn,color:rn>=0?C.green:C.red},
+                        ].map(({label,val,color})=>(
+                          <div key={label} style={{background:C.surface,borderRadius:8,
+                            border:`1px solid ${C.border}`,padding:"12px 16px"}}>
+                            <div style={{fontSize:9,color:C.textDim,letterSpacing:"0.08em",marginBottom:6}}>{label.toUpperCase()}</div>
+                            <div style={{fontFamily:"monospace",fontSize:20,fontWeight:400,color}}>{fmt(val)}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Tabella CE storico */}
+                      <CETable
+                        vals={ceLocaleS.vals}
+                        gruppi={ceLocaleS.gruppi}
+                        valsAP={ceAPS?(ceAPS[activeLocale]||ceAPS['tot']).vals:null}
+                        valsBil={ceBilS?(ceBilS[activeLocale]||ceBilS['tot']).vals:null}
+                        annoPrecName={ceAPS?"Anno precedente":null}
+                        bilancioName={ceBilS?"Bilancio approvato":null}
+                        onDrillVoce={voce=>setDrillVoce(voce)}
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
         )}
 
