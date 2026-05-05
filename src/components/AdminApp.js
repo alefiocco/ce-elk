@@ -1494,9 +1494,10 @@ export default function AdminApp({ user }) {
     }
     setPublishing(true); setPublishMsg(null);
     try {
-      const meseFmt2 = mese ? new Date(mese+'-01').toLocaleDateString('it-IT',{month:'long',year:'numeric'}) : mese;
+      const label = meseFmt();
       const payload = {
-        mese, label:meseFmt2,
+        mese, label, tipo:tipoPeriodo,
+        data_inizio:dataInizio, data_fine:dataFine,
         dati_ce:gruppiRaw, dati_anno_prec:gruppiAnnoPrec, dati_bilancio:gruppiBilancio,
         prima_nota:primaNotaRaw, extra_scritture:extra, mappatura_extra:extraMapping,
         alloc_conf:allocConf, cespiti, pubblicato_da:user?.id, pubblicato_at:new Date().toISOString(),
@@ -1579,9 +1580,21 @@ export default function AdminApp({ user }) {
           </div>
         </div>
         <div style={{display:"flex",gap:7,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
-          <input type="month" value={mese} onChange={e=>setMese(e.target.value)}
-            style={{background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:6,
-              padding:"6px 9px",color:C.text,fontSize:11}}/>
+          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+            <input type="date" value={dataInizio} onChange={e=>setDataInizio(e.target.value)}
+              style={{background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:6,
+                padding:"6px 9px",color:C.text,fontSize:11,fontFamily:"var(--font-ui)"}}/>
+            <span style={{color:C.textDim,fontSize:11}}>→</span>
+            <input type="date" value={dataFine} onChange={e=>setDataFine(e.target.value)}
+              style={{background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:6,
+                padding:"6px 9px",color:C.text,fontSize:11,fontFamily:"var(--font-ui)"}}/>
+            <select value={tipoPeriodo} onChange={e=>setTipoPeriodo(e.target.value)}
+              style={{background:C.surfaceHigh,border:`1px solid ${C.border}`,borderRadius:6,
+                padding:"6px 9px",color:C.text,fontSize:11,fontFamily:"var(--font-ui)"}}>
+              <option value="mensile">Mensile</option>
+              <option value="ytd">Progressivo YTD</option>
+            </select>
+          </div>
           <button onClick={()=>setShowMapping(true)} style={{
             background:"none",border:`1px solid ${C.borderLight}`,borderRadius:6,
             color:C.textMid,padding:"6px 13px",cursor:"pointer",fontSize:10,fontWeight:700}}>
@@ -1679,8 +1692,10 @@ export default function AdminApp({ user }) {
                   border:`1px solid ${meseStorico?.id===m.id?C.accent:C.border}`,
                   background:meseStorico?.id===m.id?C.accentDim:"none",
                   color:meseStorico?.id===m.id?C.accent:C.textMid,
-                  transition:"all 0.15s"}}>
+                  transition:"all 0.15s",display:"flex",alignItems:"center",gap:5}}>
                   {m.label||m.mese}
+                  {m.tipo==="ytd" && <span style={{fontSize:8,background:C.amberDim,
+                    color:C.amber,borderRadius:3,padding:"1px 4px"}}>YTD</span>}
                 </button>
               ))}
               {meseStorico && (
