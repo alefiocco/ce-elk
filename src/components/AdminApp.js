@@ -2,6 +2,25 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { getSupabase } from '@/lib/supabase'
 
+// ─── COLORS ──────────────────────────────────────────────────────────────────
+const C = {
+  bg:'#0f1117', surface:'#181c27', surfaceHigh:'#1e2334',
+  border:'#2a3050', borderLight:'#3a4570',
+  accent:'#4f8ef7', accentDim:'#1a2d5a',
+  green:'#3ecf8e', greenDim:'#0d3d26',
+  red:'#f76b6b', redDim:'#3d1010',
+  amber:'#f5a623', amberDim:'#3d2800',
+  purple:'#a78bfa',
+  text:'#e8ecf5', textMid:'#8b95b0', textDim:'#4a5270',
+}
+const col = n => n>=0 ? C.green : C.red
+const inputStyle = {
+  width:'100%', background:'#1e2334', border:`1px solid #2a3050`,
+  borderRadius:6, padding:'7px 10px', color:'#e8ecf5', fontSize:12,
+  outline:'none', boxSizing:'border-box',
+}
+const selectStyle = {...inputStyle, fontSize:11}
+
 // ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const PIANO_CONTI = {
   "801300":{"cod":415,"cc":10}, "801400":{"cod":200,"cc":10}, "801601":{"cod":415,"cc":10}, "801700":{"cod":415,"cc":10}, "804220":{"cod":455,"cc":10}, "804400":{"cod":476,"cc":10}, "804450":{"cod":475,"cc":5}, "804508":{"cod":455,"cc":10},
