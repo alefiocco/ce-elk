@@ -509,7 +509,7 @@ function DrillModal({ voce, gruppi, primaNotaRaw, onClose }) {
             ? "clicca ← per tornare ai conti"
             : `${conttiGruppati.length} conti contabili · clicca un conto per vedere le fatture`}
         </div>
-      </header>
+      </div>
     </div>
   );
 }
