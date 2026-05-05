@@ -6,43 +6,65 @@ import AdminApp  from '@/components/AdminApp'
 import ClientApp from '@/components/ClientApp'
 
 export default function Home() {
-  const [session, setSession] = useState(null)
-  const [ruolo,   setRuolo]   = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [state,   setState]   = useState('loading')
+  const [userObj, setUserObj] = useState(null)
 
   useEffect(() => {
     const sb = getSupabase()
-    sb.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session)
-      if (session) await loadRuolo(session.user.id)
-      setLoading(false)
+    let mounted = true
+
+    async function loadRuolo(user) {
+      try {
+        const { data, error } = await sb
+          .from('profiles').select('ruolo').eq('id', user.id).single()
+        if (!mounted) return
+        if (error || !data) { setState('login'); return }
+        setUserObj(user)
+        setState(data.ruolo === 'admin' ? 'admin' : 'cliente')
+      } catch {
+        if (mounted) setState('login')
+      }
+    }
+
+    async function init() {
+      // Safety timeout
+      const t = setTimeout(() => { if (mounted) setState('login') }, 8000)
+      try {
+        const { data: { session } } = await sb.auth.getSession()
+        clearTimeout(t)
+        if (!mounted) return
+        if (!session) { setState('login'); return }
+        await loadRuolo(session.user)
+      } catch {
+        clearTimeout(t)
+        if (mounted) setState('login')
+      }
+    }
+
+    init()
+
+    const { data: { subscription } } = sb.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return
+      if (event === 'SIGNED_OUT' || !session) { setState('login'); setUserObj(null); return }
+      if (event === 'SIGNED_IN' && session) await loadRuolo(session.user)
     })
-    const { data: { subscription } } = sb.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session)
-      if (session) await loadRuolo(session.user.id)
-      else { setRuolo(null); setLoading(false) }
-    })
-    return () => subscription.unsubscribe()
+
+    return () => { mounted = false; subscription.unsubscribe() }
   }, [])
 
-  async function loadRuolo(userId) {
-    const sb = getSupabase()
-    const { data } = await sb.from('profiles').select('ruolo').eq('id', userId).single()
-    setRuolo(data?.ruolo || 'cliente')
-    setLoading(false)
-  }
-
-  if (loading) return (
-    <div style={{minHeight:'100vh',background:'#0f1117',display:'flex',
-      alignItems:'center',justifyContent:'center',color:'#8b95b0',
-      fontFamily:'monospace',fontSize:13}}>
-      Caricamento…
+  if (state === 'loading') return (
+    <div style={{ minHeight:'100vh', background:'#0f1117', display:'flex',
+      flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16 }}>
+      <div style={{ width:32, height:32, border:'3px solid #2a3050',
+        borderTop:'3px solid #4f8ef7', borderRadius:'50%',
+        animation:'spin 0.8s linear infinite' }}/>
+      <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      <span style={{ color:'#4a5270', fontFamily:'monospace', fontSize:11 }}>Caricamento…</span>
     </div>
   )
 
-  if (!session) return <LoginPage />
-
-  return ruolo === 'admin'
-    ? <AdminApp user={session.user} />
-    : <ClientApp user={session.user} />
+  if (state === 'login')   return <LoginPage />
+  if (state === 'admin')   return <AdminApp   user={userObj} />
+  if (state === 'cliente') return <ClientApp  user={userObj} />
+  return <LoginPage />
 }
