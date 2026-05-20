@@ -1367,7 +1367,10 @@ export default function AdminApp({ user }) {
   const [mesiPubblicati, setMesiPubblicati] = useState([]);
   const [meseStorico, setMeseStorico] = useState(null);  // mese selezionato per visualizzazione
   const [datiStorico, setDatiStorico] = useState(null);  // dati del mese selezionato
-  const [loadingStorico, setLoadingStorico] = useState(false);
+  const [loadingStorico,    setLoadingStorico]    = useState(false);
+  const [updatingPrimaNota, setUpdatingPrimaNota] = useState(false);
+  const [updateMsg,         setUpdateMsg]         = useState(null);
+  const xlsStorRef = useRef(null);
   const sb = getSupabase();
   const txtContentRef = useRef(null);
 
@@ -1549,6 +1552,23 @@ export default function AdminApp({ user }) {
       setMesiPubblicati(p => p.filter(x => x.id !== m.id));
       setPublishMsg({ ok: true, msg: `✓ ${m.label||m.mese} eliminato.` });
     }
+  }
+
+  async function updatePrimaNota(meseId, file) {
+    setUpdatingPrimaNota(true); setUpdateMsg(null);
+    try {
+      const fatture = await parseExcelPrimaNota(file, extraMapping);
+      const { error } = await sb.from('mesi')
+        .update({ prima_nota: fatture, pubblicato_at: new Date().toISOString() })
+        .eq('id', meseId);
+      if (error) throw error;
+      // Aggiorna datiStorico localmente
+      setDatiStorico(d => d ? {...d, prima_nota: fatture} : d);
+      setUpdateMsg({ ok:true, msg:`✓ Prima nota aggiornata: ${fatture.length} fatture caricate.` });
+    } catch(err) {
+      setUpdateMsg({ ok:false, msg:'Errore aggiornamento: ' + (err.message||JSON.stringify(err)) });
+    }
+    setUpdatingPrimaNota(false);
   }
 
   const tuttiCE = calcolaTuttiCE(gruppiRaw, extra, allocConf, cespiti);
@@ -1735,10 +1755,15 @@ export default function AdminApp({ user }) {
                       Pubblicato il {new Date(meseStorico.pubblicato_at).toLocaleDateString('it-IT')}
                     </div>
                   </div>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    <span style={{color:C.textDim,fontSize:10}}>
-                      Ricarica un TXT con mese <span style={{fontFamily:"monospace",color:C.amber}}>{meseStorico.mese}</span> e ripubblica per sovrascrivere
-                    </span>
+                  <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                    <button onClick={()=>xlsStorRef.current?.click()} disabled={updatingPrimaNota} style={{
+                      background:`${C.green}15`,border:`1px solid ${C.green}44`,borderRadius:6,
+                      color:C.green,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600,
+                      opacity:updatingPrimaNota?0.5:1}}>
+                      {updatingPrimaNota?"…":"📥 Aggiorna prima nota"}
+                    </button>
+                    <input ref={xlsStorRef} type="file" accept=".xlsx,.xls" style={{display:"none"}}
+                      onChange={e=>{if(e.target.files[0]){updatePrimaNota(meseStorico.id,e.target.files[0]);e.target.value="";}}}/>
                     <button onClick={()=>deleteMeseStorico(meseStorico)} style={{
                       background:C.redDim,border:`1px solid ${C.red}44`,borderRadius:6,
                       color:C.red,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600}}>
@@ -1747,6 +1772,16 @@ export default function AdminApp({ user }) {
                   </div>
                 </div>
 
+                {updateMsg && (
+                  <div style={{background:updateMsg.ok?C.greenDim:C.redDim,
+                    border:`1px solid ${updateMsg.ok?C.green:C.red}`,
+                    borderRadius:7,padding:"8px 14px",marginBottom:10,
+                    display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{color:updateMsg.ok?C.green:C.red,fontSize:11}}>{updateMsg.msg}</span>
+                    <button onClick={()=>setUpdateMsg(null)} style={{background:"none",border:"none",
+                      color:updateMsg.ok?C.green:C.red,cursor:"pointer",fontSize:13}}>×</button>
+                  </div>
+                )}
                 {loadingStorico && (
                   <div style={{textAlign:"center",padding:"20px",color:C.textDim,fontSize:12}}>
                     Caricamento…
