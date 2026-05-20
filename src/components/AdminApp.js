@@ -551,7 +551,7 @@ function ExtraModal({ onSave, onClose }) {
           </select>
         </Field>
         <Field label="Importo CE (negativo = costo, positivo = ricavo)">
-          <input style={inputStyle} type="number" placeholder="Es. -1250.00" value={form.importo}
+          <input style={inputStyle} type="text" inputMode="decimal" placeholder="Es. -1250.00 o 1250" value={form.importo}
             onChange={e=>setForm(f=>({...f,importo:e.target.value}))}/>
         </Field>
         <div style={{display:"flex",gap:9}}>
@@ -559,7 +559,7 @@ function ExtraModal({ onSave, onClose }) {
             border:`1px solid ${C.border}`,borderRadius:7,color:C.textMid,cursor:"pointer",fontSize:12}}>Annulla</button>
           <button onClick={()=>{
             if(!form.descrizione||!form.importo) return;
-            onSave({...form,importo:parseFloat(form.importo)});
+            onSave({...form,importo:parseFloat(String(form.importo).replace(',','.'))||0});
             onClose();
           }} style={{flex:2,padding:"9px",background:C.accent,border:"none",
             borderRadius:7,color:"#fff",cursor:"pointer",fontSize:12,fontWeight:700}}>Aggiungi</button>
@@ -632,7 +632,7 @@ function RowTable({rows, onAdd, onRemove, onUpdate, title, colorAccent}) {
         <div key={r.id} style={{display:"grid",gridTemplateColumns:"1fr 100px 1fr 24px",gap:5,marginBottom:5}}>
           <input style={inputStyle} placeholder="Fornitore" value={r.fornitore}
             onChange={e=>onUpdate(r.id,"fornitore",e.target.value)}/>
-          <input style={inputStyle} type="number" placeholder="Importo" value={r.importo}
+          <input style={inputStyle} type="text" inputMode="decimal" placeholder="Importo (es. -1250 storno)" value={r.importo}
             onChange={e=>onUpdate(r.id,"importo",e.target.value)}/>
           <input style={inputStyle} placeholder="Note (n° fatt…)" value={r.note}
             onChange={e=>onUpdate(r.id,"note",e.target.value)}/>
@@ -713,8 +713,8 @@ function TabPersonale({ onSave, onClose }) {
   const [ccLocale, setCcLocale] = useState(10);
 
   const handleSave = () => {
-    const imp = parseFloat(importo);
-    if (!imp) return;
+    const imp = parseFloat(String(importo).replace(',','.'));
+    if (!imp || isNaN(imp)) return;
     onSave({descrizione:"Ratei personale / TFR", note, codGest:410,
       importo:-Math.abs(imp), ccLocale, tipo:"ricorrente"});
     onClose();
@@ -730,7 +730,7 @@ function TabPersonale({ onSave, onClose }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           <LocaleSelect value={ccLocale} onChange={setCcLocale}/>
           <Field label="Importo ratei + TFR (€)">
-            <input style={inputStyle} type="number" placeholder="Es. 1800.00" value={importo}
+            <input style={inputStyle} type="text" inputMode="decimal" placeholder="Es. 1800 (costo) o -1800 (storno)" value={importo}
               onChange={e=>setImporto(e.target.value)}/>
           </Field>
           <Field label="Note">
