@@ -529,7 +529,7 @@ const selectStyle = {...inputStyle, fontSize:11};
 
 function ExtraModal({ onSave, onClose }) {
   const vociInput = VOCI_CE.filter(v=>v.tipo==="input"&&typeof v.cod==="number");
-  const [form,setForm] = useState({descrizione:"",codGest:410,importo:"",note:""});
+  const [form,setForm] = useState({descrizione:"",codGest:410,importo:"",note:"",ccLocale:10});
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"#000b",zIndex:200,
       display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -548,6 +548,14 @@ function ExtraModal({ onSave, onClose }) {
           <select style={selectStyle} value={form.codGest}
             onChange={e=>setForm(f=>({...f,codGest:parseInt(e.target.value)}))}>
             {vociInput.map(v=><option key={v.cod} value={v.cod}>{v.cod} – {v.label}</option>)}
+          </select>
+        </Field>
+        <Field label="Centro di costo (locale)">
+          <select style={selectStyle} value={form.ccLocale}
+            onChange={e=>setForm(f=>({...f,ccLocale:parseInt(e.target.value)}))}>
+            {LOCALI.filter(l=>l.cc!==null).map(l=>(
+              <option key={l.id} value={l.cc}>{l.label}</option>
+            ))}
           </select>
         </Field>
         <Field label="Importo CE (negativo = costo, positivo = ricavo)">
@@ -716,7 +724,7 @@ function TabPersonale({ onSave, onClose }) {
     const imp = parseFloat(String(importo).replace(',','.'));
     if (!imp || isNaN(imp)) return;
     onSave({descrizione:"Ratei personale / TFR", note, codGest:410,
-      importo:-Math.abs(imp), ccLocale, tipo:"ricorrente"});
+      importo:imp, ccLocale, tipo:"ricorrente"});
     onClose();
   };
 
