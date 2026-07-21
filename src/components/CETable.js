@@ -33,10 +33,10 @@ export default function CETable({ vals, gruppi, valsAP, valsBil, annoPrecName, b
             <th style={{ textAlign:'right', width:110 }}>Importo €</th>
             <th style={{ textAlign:'right', width:70 }}>% Ric.</th>
             <th style={{ textAlign:'right', width:110, color: annoPrecName?'var(--purple)':'var(--text-04)', opacity:annoPrecName?1:0.4 }}>
-              Anno prec.
+              {annoPrecName || 'Confronto'}
             </th>
             <th style={{ textAlign:'right', width:110, color:bilancioName?'var(--amber)':'var(--text-04)', opacity:bilancioName?1:0.4 }}>
-              Bil. approv.
+              {bilancioName || 'Bil. approv.'}
             </th>
           </tr>
         </thead>
