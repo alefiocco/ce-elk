@@ -150,36 +150,38 @@ export default function ClientApp({ user }) {
 
   function loadScript(src){
     return new Promise((resolve,reject)=>{
-      if([...document.scripts].some(s=>s.src===src)){resolve();return}
+      const existing=[...document.scripts].find(s=>s.src===src)
+      if(existing){
+        if(existing.dataset.loaded==='1'){resolve();return}
+        existing.addEventListener('load',()=>resolve())
+        existing.addEventListener('error',()=>reject(new Error('load error')))
+        return
+      }
       const el=document.createElement('script')
-      el.src=src; el.onload=resolve; el.onerror=reject
+      el.src=src
+      el.onload=()=>{el.dataset.loaded='1';resolve()}
+      el.onerror=()=>reject(new Error('load error'))
       document.head.appendChild(el)
     })
   }
 
   async function exportPDF(){
     if(!datiMese||!ceLocale)return
-    // Carica jsPDF + autotable da CDN se non presenti
     try {
-      if(!window.jspdf){
+      // Carica jsPDF da CDN se non presente e attendi che sia pronto
+      if(!(window.jspdf && window.jspdf.jsPDF)){
         await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
       }
-      // attendi che jspdf sia disponibile
       let tries=0
-      while(!window.jspdf && tries<50){ await new Promise(r=>setTimeout(r,100)); tries++ }
-      if(!window.jspdf){ alert('Impossibile caricare la libreria PDF. Riprova.'); return }
+      while(!(window.jspdf && window.jspdf.jsPDF) && tries<100){
+        await new Promise(r=>setTimeout(r,50)); tries++
+      }
+      if(!(window.jspdf && window.jspdf.jsPDF)){
+        alert('Impossibile caricare la libreria PDF. Controlla la connessione e riprova.'); return
+      }
 
       const jsPDF = window.jspdf.jsPDF
       const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'})
-
-      // autotable: carica e verifica che si attacchi al doc
-      if(typeof doc.autoTable !== 'function'){
-        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js')
-        tries=0
-        while(typeof doc.autoTable!=='function' && tries<50){ await new Promise(r=>setTimeout(r,100)); tries++ }
-      }
-      if(typeof doc.autoTable !== 'function'){ alert('Impossibile caricare il componente tabella PDF. Riprova.'); return }
-
       generatePDF(doc, jsPDF)
     } catch(e) {
       alert('Errore generazione PDF: ' + (e.message||e))
