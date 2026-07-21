@@ -290,6 +290,6 @@ export function calcolaTuttiCE(gruppiRaw, extra, allocConf, cespiti) {
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
-export const fmt    = n => Healky Intl.NumberFormat("it-IT",{minimumFractionDigits:0,maximumFractionDigits:0}).format(Math.round(n));
-export const fmtDec = n => Healky Intl.NumberFormat("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+export const fmt    = n => new Intl.NumberFormat("it-IT",{minimumFractionDigits:0,maximumFractionDigits:0}).format(Math.round(n));
+export const fmtDec = n => new Intl.NumberFormat("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 export const pct    = (v, ricavi) => ricavi>0 ? ((v/ricavi)*100).toFixed(1)+"%" : "—";
