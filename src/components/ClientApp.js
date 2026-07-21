@@ -189,54 +189,113 @@ export default function ClientApp({ user }) {
   function generatePDF(doc, jsPDF){
     const localeLabel=LOCALI.find(l=>l.id===activeLocale)?.label||'Totale'
     const ricaviPdf=Math.abs(vals[100]||0)
+    const W=210, M=14  // larghezza pagina, margine
 
-    // Header scuro
-    doc.setFillColor(26,39,68);doc.rect(0,0,210,28,'F')
-    doc.setFont('helvetica','bold');doc.setFontSize(13);doc.setTextColor(255,255,255)
-    doc.text('Studio FNP',14,11)
-    doc.setFont('helvetica','normal');doc.setFontSize(8);doc.setTextColor(180,195,220)
-    doc.text('ELK SRL',14,17)
-    doc.text(datiMese.label+' · '+localeLabel,196,11,{align:'right'})
-    doc.text('Generato il '+new Date().toLocaleDateString('it-IT'),196,17,{align:'right'})
+    // ═══ HEADER ═══
+    doc.setFillColor(26,39,68); doc.rect(0,0,W,26,'F')
+    doc.setFillColor(45,91,227); doc.rect(0,26,W,1.5,'F')  // accent line
+    doc.setFont('helvetica','bold'); doc.setFontSize(15); doc.setTextColor(255,255,255)
+    doc.text('Studio FNP',M,12)
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150,170,205)
+    doc.text('Conto Economico Riclassificato a Valore Aggiunto',M,18.5)
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(255,255,255)
+    doc.text('ELK SRL',W-M,11,{align:'right'})
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150,170,205)
+    doc.text(datiMese.label+'  ·  '+localeLabel,W-M,17,{align:'right'})
+    doc.text('Emesso il '+new Date().toLocaleDateString('it-IT'),W-M,21.5,{align:'right'})
 
-    // Title bar
-    doc.setFillColor(45,91,227);doc.rect(0,28,210,8,'F')
-    doc.setFont('helvetica','bold');doc.setFontSize(7.5);doc.setTextColor(255,255,255)
-    doc.text('CONTO ECONOMICO RICLASSIFICATO A VALORE AGGIUNTO',14,33.5)
-
-    // Cards
-    const cards = [
-     {label:'RICAVI NETTI',val:fmt(ricaviPdf),color:[59,130,246]},
-     {label:'EBIT',val:fmt(vals['EBIT']||0),color:(vals['EBIT']||0)>=0?[26,122,74]:[192,57,43]},
-     {label:'RISULTATO NETTO',val:fmt(vals['RN']||0),color:(vals['RN']||0)>=0?[26,122,74]:[192,57,43]}
+    // ═══ METRIC CARDS ═══
+    const cardY=33, cardH=18, gap=4
+    const cardW=(W-2*M-2*gap)/3
+    const cards=[
+      {label:'RICAVI NETTI', val:fmt(ricaviPdf), color:[45,91,227]},
+      {label:'EBIT', val:fmt(vals['EBIT']||0), sub:ricaviPdf>0?pct(vals['EBIT']||0,ricaviPdf):'', color:(vals['EBIT']||0)>=0?[26,122,74]:[192,57,43]},
+      {label:'RISULTATO NETTO', val:fmt(vals['RN']||0), sub:ricaviPdf>0?pct(vals['RN']||0,ricaviPdf):'', color:(vals['RN']||0)>=0?[26,122,74]:[192,57,43]},
     ]
-    cards.forEach(({label,val,color},i)=>{
-      const x=[14,77,140][i]
-      doc.setDrawColor(224,228,239);doc.setFillColor(255,255,255)
-      doc.roundedRect(x,40,56,16,2,2,'FD')
-      doc.setFont('helvetica','normal');doc.setFontSize(6.5);doc.setTextColor(100,110,130)
-      doc.text(label,x+28,46,{align:'center'})
-      doc.setFont('helvetica','bold');doc.setFontSize(11);doc.setTextColor(...color)
-      doc.text(val,x+28,53,{align:'center'})
+    cards.forEach((c,i)=>{
+      const x=M+i*(cardW+gap)
+      doc.setFillColor(247,248,250); doc.setDrawColor(230,233,240); doc.setLineWidth(0.3)
+      doc.roundedRect(x,cardY,cardW,cardH,2,2,'FD')
+      doc.setFillColor(c.color[0],c.color[1],c.color[2]); doc.rect(x,cardY,1.2,cardH,'F')
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(120,130,150)
+      doc.text(c.label,x+6,cardY+5.5)
+      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(c.color[0],c.color[1],c.color[2])
+      doc.text(c.val+' €',x+6,cardY+12)
+      if(c.sub){ doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(120,130,150)
+        doc.text(c.sub+' dei ricavi',x+6,cardY+15.8) }
     })
 
-    // Table
-    const rows=VOCI_CE.map(v=>{const val=vals[v.cod]??0;return{cod:typeof v.cod==='number'?String(v.cod):'',label:v.label,imp:val===0?'—':fmt(val),pct:val===0?'—':pct(val,ricaviPdf),tipo:v.tipo,val}})
-    doc.autoTable({
-      startY:60,head:[['Cod','Voce','Importo €','% Ricavi']],body:rows.map(r=>[r.cod,r.label,r.imp,r.pct]),
-      styles:{font:'helvetica',fontSize:8,cellPadding:[2,3,2,3]},
-      headStyles:{fillColor:[240,243,250],textColor:[50,60,80],fontStyle:'bold',fontSize:7.5,lineWidth:0.1,lineColor:[26,39,68]},
-      columnStyles:{0:{cellWidth:12,textColor:[100,110,130]},1:{cellWidth:110},2:{cellWidth:30,halign:'right',font:'courier'},3:{cellWidth:24,halign:'right',textColor:[100,110,130]}},
-      didParseCell:(data)=>{
-        if(data.section!=='body')return
-        const row=rows[data.row.index];if(!row)return
-        if(row.tipo==='subtot'){data.cell.styles.fillColor=[255,248,230];data.cell.styles.fontStyle='bold'}
-        if(row.tipo==='result'){data.cell.styles.fillColor=[232,240,254];data.cell.styles.fontStyle='bold';data.cell.styles.fontSize=9;if(data.column.index===2)data.cell.styles.textColor=row.val>=0?[26,122,74]:[192,57,43]}
-        if(row.tipo==='stima'){data.cell.styles.textColor=[120,130,150];data.cell.styles.fontStyle='italic'}
-      },
-      foot:[[''  ,'Documento riservato · Studio FNP','','p.1']],
-      footStyles:{fillColor:[255,255,255],textColor:[180,180,180],fontSize:7,lineWidth:0.1,lineColor:[220,224,232]},
-    })
+    // ═══ TABELLA CE ═══
+    let y=cardY+cardH+7
+    const rowH=5.0
+    const colCod=M, colVoce=M+13, colImp=W-M-32, colPct=W-M
+
+    // intestazione tabella
+    doc.setFillColor(26,39,68); doc.rect(M,y,W-2*M,6,'F')
+    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(255,255,255)
+    doc.text('COD',colCod+1,y+4)
+    doc.text('VOCE',colVoce,y+4)
+    doc.text('IMPORTO €',colImp,y+4,{align:'right'})
+    doc.text('% RIC.',colPct,y+4,{align:'right'})
+    y+=6
+
+    const drawRow=(voce)=>{
+      const val=vals[voce.cod]??0
+      const isSubtot=voce.tipo==='subtot'
+      const isResult=voce.tipo==='result'
+      const isStima=voce.tipo==='stima'
+      const h=(isResult)?6.5:rowH
+
+      if(isResult){
+        doc.setFillColor(val>=0?232:252, val>=0?240:235, val>=0?254:235); doc.rect(M,y,W-2*M,h,'F')
+      } else if(isSubtot){
+        doc.setFillColor(255,248,230); doc.rect(M,y,W-2*M,h,'F')
+      }
+
+      const ty=y+(isResult?4.5:3.4)
+      if(isResult){
+        doc.setFont('helvetica','bold'); doc.setFontSize(8.5)
+        doc.setTextColor(val>=0?26:192, val>=0?122:57, val>=0?74:43)
+        doc.text(voce.label,colVoce,ty)
+        doc.text((val<0?'-':'')+fmt(Math.abs(val))+' €',colImp,ty,{align:'right'})
+        doc.text(ricaviPdf>0?pct(val,ricaviPdf):'—',colPct,ty,{align:'right'})
+      } else if(isSubtot){
+        doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(133,79,11)
+        doc.text(voce.label,colVoce,ty)
+        doc.setTextColor(val>=0?26:192, val>=0?122:57, val>=0?74:43)
+        doc.text((val<0?'-':'')+fmt(Math.abs(val))+' €',colImp,ty,{align:'right'})
+        doc.setTextColor(133,79,11)
+        doc.text(ricaviPdf>0?pct(val,ricaviPdf):'—',colPct,ty,{align:'right'})
+      } else {
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5)
+        doc.setTextColor(150,155,165)
+        if(typeof voce.cod==='number') doc.text(String(voce.cod),colCod+1,ty)
+        doc.setTextColor(isStima?120:60, isStima?128:65, isStima?145:75)
+        if(isStima) doc.setFont('helvetica','italic')
+        doc.text(voce.label,colVoce,ty)
+        if(val===0){ doc.setTextColor(190,195,205); doc.text('—',colImp,ty,{align:'right'}); doc.text('—',colPct,ty,{align:'right'}) }
+        else {
+          doc.setTextColor(val>=0?26:192, val>=0?122:57, val>=0?74:43)
+          doc.text((val<0?'-':'')+fmt(Math.abs(val))+' €',colImp,ty,{align:'right'})
+          doc.setTextColor(120,128,145)
+          doc.text(ricaviPdf>0?pct(val,ricaviPdf):'—',colPct,ty,{align:'right'})
+        }
+        // hairline
+        doc.setDrawColor(238,240,244); doc.setLineWidth(0.15)
+        doc.line(M,y+h,W-M,y+h)
+      }
+      y+=h
+    }
+
+    VOCI_CE.forEach(drawRow)
+
+    // ═══ FOOTER ═══
+    const fy=286
+    doc.setDrawColor(230,233,240); doc.setLineWidth(0.3); doc.line(M,fy,W-M,fy)
+    doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(150,155,165)
+    doc.text('Documento riservato · Studio FNP · Uso interno',M,fy+4)
+    doc.text('Pagina 1 di 1',W-M,fy+4,{align:'right'})
+
     doc.save(`CE_${datiMese.mese}_${activeLocale}.pdf`)
   }
 
