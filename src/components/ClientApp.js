@@ -29,14 +29,14 @@ function DrillModal({ voce, gruppi, primaNotaRaw, onClose }) {
     const fatture = (primaNotaRaw||[]).filter(r => r.conto === cg.conto)
     const totFatt = fatture.reduce((s,f) => s+f.importoCE, 0)
     return (
-      <div style={{display:'flex',flexDirection:'column',height:'100%'}}>
+      <div style={{display:'flex',flexDirection:'column',height:'100%',minHeight:0}}>
         <div style={{padding:'10px 20px',background:'var(--surface-02)',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
           <button onClick={()=>setSelectedConto(null)} className="btn btn-ghost" style={{padding:'3px 10px',fontSize:10}}>← conti</button>
           <span style={{fontFamily:'var(--font-mono)',color:'var(--blue)',fontSize:11}}>{cg.conto}</span>
           <span style={{color:'var(--text)',fontSize:12,flex:1}}>{cg.descrizione}</span>
           <span style={{fontFamily:'var(--font-mono)',fontWeight:600,color:colVal(cg.totale),fontSize:14}}>{fmt(cg.totale)}</span>
         </div>
-        <div style={{overflowY:'auto',flex:1}}>
+        <div style={{overflowY:'auto',flex:1,minHeight:0}}>
           {fatture.length===0 ? (
             <div style={{padding:'32px',textAlign:'center',color:'var(--text-03)',fontSize:12}}>
               <div style={{fontSize:24,marginBottom:8}}>📂</div>
@@ -90,9 +90,9 @@ function DrillModal({ voce, gruppi, primaNotaRaw, onClose }) {
             <button onClick={onClose} className="btn btn-ghost" style={{width:28,height:28,padding:0,justifyContent:'center'}}>×</button>
           </div>
         </div>
-        <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+        <div style={{flex:1,overflow:'hidden',display:'flex',flexDirection:'column',minHeight:0}}>
           {selectedConto ? <FattureView cg={selectedConto}/> : (
-            <div style={{overflowY:'auto',flex:1}}>
+            <div style={{overflowY:'auto',flex:1,minHeight:0}}>
               <table className="data-table">
                 <thead><tr>{['Conto','Descrizione','N° mov','Totale CE',''].map((h,i)=><th key={i} style={{textAlign:i>=2?'right':'left'}}>{h}</th>)}</tr></thead>
                 <tbody>
