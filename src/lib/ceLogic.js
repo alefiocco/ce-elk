@@ -2,12 +2,12 @@
 
 export const LOCALI = [
   { id:"tot",  label:"Totale",   cc: null },
-  { id:"via4", label:"Via 4",    cc: 10   },
-  { id:"capp", label:"Via Capp", cc: 20   },
-  { id:"new",  label:"New",      cc: 30   },
+  { id:"via4", label:"Via IV Novembre",    cc: 10   },
+  { id:"capp", label:"The Garden", cc: 20   },
+  { id:"Healky",  label:"Healky",      cc: 30   },
 ];
 
-export const CC_LABELS = { 5:"Indiretti", 10:"Via 4", 20:"Via Capp", 30:"New" };
+export const CC_LABELS = { 5:"Indiretti", 10:"Via IV Novembre", 20:"The Garden", 30:"Healky" };
 
 export const VOCI_CE = [
   { cod:100,  label:"Ricavi netti di Vendita",                 tipo:"input",  segno: 1 },
@@ -290,6 +290,6 @@ export function calcolaTuttiCE(gruppiRaw, extra, allocConf, cespiti) {
 }
 
 // ─── UTILS ────────────────────────────────────────────────────────────────────
-export const fmt    = n => new Intl.NumberFormat("it-IT",{minimumFractionDigits:0,maximumFractionDigits:0}).format(Math.round(n));
-export const fmtDec = n => new Intl.NumberFormat("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+export const fmt    = n => Healky Intl.NumberFormat("it-IT",{minimumFractionDigits:0,maximumFractionDigits:0}).format(Math.round(n));
+export const fmtDec = n => Healky Intl.NumberFormat("it-IT",{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
 export const pct    = (v, ricavi) => ricavi>0 ? ((v/ricavi)*100).toFixed(1)+"%" : "—";
