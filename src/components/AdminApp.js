@@ -331,7 +331,7 @@ function FattureModal({ conto, descrizione, movimentiConto, primaNotaRaw, onBack
   const hasFatture = fatture.length > 0;
 
   return (
-    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
+    <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
       {/* Sub-header */}
       <div style={{padding:"10px 20px",background:C.surfaceHigh,borderBottom:`1px solid ${C.border}`,
         display:"flex",alignItems:"center",gap:10}}>
@@ -348,7 +348,7 @@ function FattureModal({ conto, descrizione, movimentiConto, primaNotaRaw, onBack
         </span>
       </div>
 
-      <div style={{overflowY:"auto",flex:1}}>
+      <div style={{overflowY:"auto",flex:1,minHeight:0}}>
         {!hasFatture ? (
           <div style={{padding:"32px",textAlign:"center"}}>
             <div style={{fontSize:24,marginBottom:8}}>📂</div>
@@ -442,7 +442,7 @@ function DrillModal({ voce, gruppi, primaNotaRaw, onClose }) {
         </div>
 
         {/* Contenuto: livello 1 o livello 2 */}
-        <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column"}}>
+        <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column",minHeight:0}}>
           {selectedConto ? (
             <FattureModal
               conto={selectedConto.conto}
@@ -453,7 +453,7 @@ function DrillModal({ voce, gruppi, primaNotaRaw, onClose }) {
               onClose={onClose}
             />
           ) : (
-            <div style={{overflowY:"auto",flex:1}}>
+            <div style={{overflowY:"auto",flex:1,minHeight:0}}>
               <table style={{width:"100%",borderCollapse:"collapse"}}>
                 <thead>
                   <tr style={{background:C.surfaceHigh}}>
