@@ -667,16 +667,16 @@ function TabFatture({ onSave, onClose }) {
 
   const handleSave = () => {
     for (const r of scarico) {
-      const imp = parseFloat(r.importo);
-      if (!r.fornitore || !imp) continue;
-      onSave({descrizione:`SCARICO comp.prec. – ${r.fornitore}`,
+      const imp = parseFloat(String(r.importo).replace(",","."));
+      if (!imp || isNaN(imp)) continue;
+      onSave({descrizione:`SCARICO comp.prec.${r.fornitore?" – "+r.fornitore:""}`,
         note:r.note, codGest:cod, importo:imp, ccLocale, tipo:"ricorrente"});
     }
     for (const r of carico) {
-      const imp = parseFloat(r.importo);
-      if (!r.fornitore || !imp) continue;
-      onSave({descrizione:`CARICO comp.corr. – ${r.fornitore}`,
-        note:r.note, codGest:cod, importo:-imp, ccLocale, tipo:"ricorrente"});
+      const imp = parseFloat(String(r.importo).replace(",","."));
+      if (!imp || isNaN(imp)) continue;
+      onSave({descrizione:`CARICO comp.corr.${r.fornitore?" – "+r.fornitore:""}`,
+        note:r.note, codGest:cod, importo:imp, ccLocale, tipo:"ricorrente"});
     }
     onClose();
   };
@@ -1338,6 +1338,7 @@ export default function AdminApp({ user }) {
   const [gruppiRaw, setGruppiRaw] = useState({});
   const [extra, setExtra] = useState([]);
   const [drillVoce, setDrillVoce] = useState(null);
+  const [drillSource, setDrillSource] = useState(null); // {gruppi, primaNota} del mese storico, o null=corrente
   const [showExtra, setShowExtra] = useState(false);
   const [showRicorrenti, setShowRicorrenti] = useState(false);
   const [showCoeff, setShowCoeff] = useState(false);
@@ -1834,7 +1835,10 @@ export default function AdminApp({ user }) {
                         valsBil={ceBilS?(ceBilS[activeLocale]||ceBilS['tot']).vals:null}
                         annoPrecName={ceAPS?"Anno precedente":null}
                         bilancioName={ceBilS?"Bilancio approvato":null}
-                        onDrillVoce={voce=>setDrillVoce(voce)}
+                        onDrillVoce={voce=>{
+                          setDrillSource({gruppi:ceLocaleS.gruppi, primaNota:datiStorico.prima_nota||[]});
+                          setDrillVoce(voce);
+                        }}
                       />
                     </div>
                   );
@@ -2022,7 +2026,7 @@ export default function AdminApp({ user }) {
             const key = String(voce.cod);
             const hasData = gruppi[key]?.movimenti?.length > 0;
             return (
-              <div key={i} onClick={hasData?()=>setDrillVoce(voce):undefined}
+              <div key={i} onClick={hasData?()=>{setDrillSource(null);setDrillVoce(voce);}:undefined}
                 style={{display:"grid",gridTemplateColumns:"48px 1fr 100px 58px 100px 100px",
                   padding:"7px 16px",borderTop:`1px solid ${C.border}18`,
                   cursor:hasData?"pointer":"default",transition:"background 0.12s"}}
@@ -2069,7 +2073,7 @@ export default function AdminApp({ user }) {
         )}
       </div>
 
-      {drillVoce && <DrillModal voce={drillVoce} gruppi={gruppi} primaNotaRaw={primaNotaRaw} onClose={()=>setDrillVoce(null)}/>}
+      {drillVoce && <DrillModal voce={drillVoce} gruppi={drillSource?drillSource.gruppi:gruppi} primaNotaRaw={drillSource?drillSource.primaNota:primaNotaRaw} onClose={()=>{setDrillVoce(null);setDrillSource(null);}}/>}
       {showMapping && <MappingPanel extraMapping={extraMapping} setExtraMapping={setExtraMapping} gruppiRaw={gruppiRaw} onClose={()=>setShowMapping(false)}/>}
       {showCoeff && <CespitiPanel cespiti={cespiti} setCespiti={setCespiti} allocConf={allocConf} setAllocConf={setAllocConf} gruppiRaw={gruppiRaw} onClose={()=>setShowCoeff(false)}/>}
       {showExtra && <ExtraModal onSave={ex=>setExtra(e=>[...e,ex])} onClose={()=>setShowExtra(false)}/>}
