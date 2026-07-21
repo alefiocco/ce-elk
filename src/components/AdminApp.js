@@ -669,14 +669,16 @@ function TabFatture({ onSave, onClose }) {
     for (const r of scarico) {
       const imp = parseFloat(String(r.importo).replace(",","."));
       if (!imp || isNaN(imp)) continue;
+      // SCARICO: riduce il costo → segno positivo in CE (valore assoluto)
       onSave({descrizione:`SCARICO comp.prec.${r.fornitore?" – "+r.fornitore:""}`,
-        note:r.note, codGest:cod, importo:imp, ccLocale, tipo:"ricorrente"});
+        note:r.note, codGest:cod, importo:Math.abs(imp), ccLocale, tipo:"ricorrente"});
     }
     for (const r of carico) {
       const imp = parseFloat(String(r.importo).replace(",","."));
       if (!imp || isNaN(imp)) continue;
+      // CARICO: aumenta il costo → segno negativo in CE (valore assoluto)
       onSave({descrizione:`CARICO comp.corr.${r.fornitore?" – "+r.fornitore:""}`,
-        note:r.note, codGest:cod, importo:imp, ccLocale, tipo:"ricorrente"});
+        note:r.note, codGest:cod, importo:-Math.abs(imp), ccLocale, tipo:"ricorrente"});
     }
     onClose();
   };
