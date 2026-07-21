@@ -148,10 +148,23 @@ export default function ClientApp({ user }) {
 
   async function handleLogout(){try{await sb.auth.signOut()}catch{}window.location.href=window.location.pathname}
 
+  function loadScript(src){
+    return new Promise((resolve,reject)=>{
+      if([...document.scripts].some(s=>s.src===src)){resolve();return}
+      const el=document.createElement('script')
+      el.src=src; el.onload=resolve; el.onerror=reject
+      document.head.appendChild(el)
+    })
+  }
+
   async function exportPDF(){
     if(!datiMese||!ceLocale)return
-    const{default:jsPDF}=await import('jspdf')
-    const{default:autoTable}=await import('jspdf-autotable')
+    // Carica jsPDF + autotable da CDN se non presenti
+    try {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js')
+    } catch(e) { alert('Errore caricamento libreria PDF'); return }
+    const jsPDF = window.jspdf.jsPDF
     const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'})
     const localeLabel=LOCALI.find(l=>l.id===activeLocale)?.label||'Totale'
     const ricaviPdf=Math.abs(vals[100]||0)
@@ -186,7 +199,7 @@ export default function ClientApp({ user }) {
 
     // Table
     const rows=VOCI_CE.map(v=>{const val=vals[v.cod]??0;return{cod:typeof v.cod==='number'?String(v.cod):'',label:v.label,imp:val===0?'—':fmt(val),pct:val===0?'—':pct(val,ricaviPdf),tipo:v.tipo,val}})
-    autoTable(doc,{
+    doc.autoTable({
       startY:60,head:[['Cod','Voce','Importo €','% Ricavi']],body:rows.map(r=>[r.cod,r.label,r.imp,r.pct]),
       styles:{font:'helvetica',fontSize:8,cellPadding:[2,3,2,3]},
       headStyles:{fillColor:[240,243,250],textColor:[50,60,80],fontStyle:'bold',fontSize:7.5,lineWidth:0.1,lineColor:[26,39,68]},
