@@ -161,11 +161,32 @@ export default function ClientApp({ user }) {
     if(!datiMese||!ceLocale)return
     // Carica jsPDF + autotable da CDN se non presenti
     try {
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
-      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js')
-    } catch(e) { alert('Errore caricamento libreria PDF'); return }
-    const jsPDF = window.jspdf.jsPDF
-    const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'})
+      if(!window.jspdf){
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js')
+      }
+      // attendi che jspdf sia disponibile
+      let tries=0
+      while(!window.jspdf && tries<50){ await new Promise(r=>setTimeout(r,100)); tries++ }
+      if(!window.jspdf){ alert('Impossibile caricare la libreria PDF. Riprova.'); return }
+
+      const jsPDF = window.jspdf.jsPDF
+      const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'})
+
+      // autotable: carica e verifica che si attacchi al doc
+      if(typeof doc.autoTable !== 'function'){
+        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js')
+        tries=0
+        while(typeof doc.autoTable!=='function' && tries<50){ await new Promise(r=>setTimeout(r,100)); tries++ }
+      }
+      if(typeof doc.autoTable !== 'function'){ alert('Impossibile caricare il componente tabella PDF. Riprova.'); return }
+
+      generatePDF(doc, jsPDF)
+    } catch(e) {
+      alert('Errore generazione PDF: ' + (e.message||e))
+    }
+  }
+
+  function generatePDF(doc, jsPDF){
     const localeLabel=LOCALI.find(l=>l.id===activeLocale)?.label||'Totale'
     const ricaviPdf=Math.abs(vals[100]||0)
 
@@ -184,10 +205,12 @@ export default function ClientApp({ user }) {
     doc.text('CONTO ECONOMICO RICLASSIFICATO A VALORE AGGIUNTO',14,33.5)
 
     // Cards
-    [{label:'RICAVI NETTI',val:fmt(ricaviPdf),color:[59,130,246]},
+    const cards = [
+     {label:'RICAVI NETTI',val:fmt(ricaviPdf),color:[59,130,246]},
      {label:'EBIT',val:fmt(vals['EBIT']||0),color:(vals['EBIT']||0)>=0?[26,122,74]:[192,57,43]},
      {label:'RISULTATO NETTO',val:fmt(vals['RN']||0),color:(vals['RN']||0)>=0?[26,122,74]:[192,57,43]}
-    ].forEach(({label,val,color},i)=>{
+    ]
+    cards.forEach(({label,val,color},i)=>{
       const x=[14,77,140][i]
       doc.setDrawColor(224,228,239);doc.setFillColor(255,255,255)
       doc.roundedRect(x,40,56,16,2,2,'FD')
