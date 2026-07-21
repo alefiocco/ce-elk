@@ -41,12 +41,12 @@ const PIANO_CONTI = {
   "901401":{"cod":700,"cc":5}, "804222":{"cod":240,"cc":5}, "820113":{"cod":400,"cc":5}, "820600":{"cod":400,"cc":5}, "821509":{"cod":400,"cc":30}, "821518":{"cod":400,"cc":30}, "901115":{"cod":100,"cc":30}, "901118":{"cod":100,"cc":10},
 };
 
-const CC_LABELS = { 5:"Indiretti", 10:"Via 4", 20:"Via Capp", 30:"New" };
+const CC_LABELS = { 5:"Indiretti", 10:"Via IV Novembre", 20:"The Garden", 30:"Healky" };
 const LOCALI = [
   { id:"tot",  label:"Totale",   cc: null },
-  { id:"via4", label:"Via 4",    cc: 10   },
-  { id:"capp", label:"Via Capp", cc: 20   },
-  { id:"new",  label:"New",      cc: 30   },
+  { id:"via4", label:"Via IV Novembre",    cc: 10   },
+  { id:"capp", label:"The Garden", cc: 20   },
+  { id:"new",  label:"Healky",      cc: 30   },
 ];
 
 const VOCI_CE = [
@@ -822,7 +822,7 @@ function SaveBar({ onClose, onSave }) {
   );
 }
 const VOCI_CE_INPUT = VOCI_CE.filter(v => v.tipo === "input" && typeof v.cod === "number");
-const CC_OPTIONS = [{cc:5,label:"5 – Indiretti"},{cc:10,label:"10 – Via 4"},{cc:20,label:"20 – Via Capp"},{cc:30,label:"30 – New"}];
+const CC_OPTIONS = [{cc:5,label:"5 – Indiretti"},{cc:10,label:"10 – Via IV Novembre"},{cc:20,label:"20 – The Garden"},{cc:30,label:"30 – Healky"}];
 
 function MappingPanel({ onClose, extraMapping, setExtraMapping, gruppiRaw }) {
   const [tab, setTab] = useState("modifica"); // modifica | aggiungi | nonmappati
@@ -839,7 +839,7 @@ function MappingPanel({ onClose, extraMapping, setExtraMapping, gruppiRaw }) {
   const [saved, setSaved] = useState(false);
 
   const vociInput = VOCI_CE.filter(v=>v.tipo==="input"&&typeof v.cod==="number");
-  const ccOpts = [{cc:5,label:"5 – Indiretti"},{cc:10,label:"10 – Via 4"},{cc:20,label:"20 – Via Capp"},{cc:30,label:"30 – New"}];
+  const ccOpts = [{cc:5,label:"5 – Indiretti"},{cc:10,label:"10 – Via IV Novembre"},{cc:20,label:"20 – The Garden"},{cc:30,label:"30 – Healky"}];
   const voceLabel = cod => vociInput.find(v=>v.cod===cod)?.label || String(cod);
 
   // Conti non mappati: presenti nel TXT ma non in PIANO_CONTI + extraMapping
