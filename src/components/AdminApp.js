@@ -1582,6 +1582,17 @@ export default function AdminApp({ user }) {
     setUpdatingPrimaNota(false);
   }
 
+  function downloadJSONStorico() {
+    if (!datiStorico) return;
+    const blob = new Blob([JSON.stringify(datiStorico, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ce_${datiStorico.mese || 'periodo'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const tuttiCE = calcolaTuttiCE(gruppiRaw, extra, allocConf, cespiti);
   const { vals, gruppi } = tuttiCE[activeLocale] || tuttiCE["tot"];
   const localeAttivo = LOCALI.find(l => l.id === activeLocale);
@@ -1767,6 +1778,12 @@ export default function AdminApp({ user }) {
                     </div>
                   </div>
                   <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                    <button onClick={downloadJSONStorico} disabled={!datiStorico} style={{
+                      background:`${C.accent}15`,border:`1px solid ${C.accent}55`,borderRadius:6,
+                      color:C.accent,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600,
+                      opacity:datiStorico?1:0.4}}>
+                      ⬇ Scarica JSON
+                    </button>
                     <button onClick={()=>xlsStorRef.current?.click()} disabled={updatingPrimaNota} style={{
                       background:`${C.green}15`,border:`1px solid ${C.green}44`,borderRadius:6,
                       color:C.green,padding:"5px 12px",cursor:"pointer",fontSize:11,fontWeight:600,
