@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { getSupabase } from '@/lib/supabase'
 import { LOCALI, calcolaTuttiCE, fmt, pct, VOCI_CE } from '@/lib/ceLogic'
 import CETable from './CETable'
+import Dashboard from './Dashboard'
 
 const fmtIT = n => new Intl.NumberFormat('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n)
 const colVal = n => n>=0 ? 'var(--green)' : 'var(--red)'
@@ -136,6 +137,7 @@ export default function ClientApp({ user }) {
   const [activeLocale,setLocale]=useState('tot')
   const [loading,setLoading]=useState(true)
   const [drillVoce,setDrillVoce]=useState(null)
+  const [vista,setVista]=useState('ce') // 'ce' | 'dashboard'
   const sb=getSupabase()
 
   useEffect(()=>{
@@ -334,12 +336,19 @@ export default function ClientApp({ user }) {
           </div>
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          {datiMese&&<button className="btn btn-success" onClick={exportPDF}>⬇ PDF</button>}
+          <div style={{display:'flex',gap:2,background:'var(--surface-02)',padding:3,borderRadius:8,marginRight:4}}>
+            <button onClick={()=>setVista('ce')} style={{padding:'6px 12px',borderRadius:6,fontSize:12,fontWeight:500,cursor:'pointer',border:'none',fontFamily:'var(--font-ui)',background:vista==='ce'?'var(--surface-03)':'transparent',color:vista==='ce'?'var(--text)':'var(--text-03)'}}>Conto Economico</button>
+            <button onClick={()=>setVista('dashboard')} style={{padding:'6px 12px',borderRadius:6,fontSize:12,fontWeight:500,cursor:'pointer',border:'none',fontFamily:'var(--font-ui)',background:vista==='dashboard'?'var(--surface-03)':'transparent',color:vista==='dashboard'?'var(--text)':'var(--text-03)'}}>Dashboard</button>
+          </div>
+          {datiMese&&vista==='ce'&&<button className="btn btn-success" onClick={exportPDF}>⬇ PDF</button>}
           <button className="btn btn-ghost" onClick={handleLogout}>Esci</button>
         </div>
       </header>
 
       <main style={{maxWidth:1100,margin:'0 auto',padding:'24px 20px'}}>
+        {vista==='dashboard' ? (
+          <Dashboard activeLocale={activeLocale}/>
+        ) : (<>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:24}}>
           <div>
             <div style={{fontSize:10,fontWeight:600,letterSpacing:'0.08em',color:'var(--text-03)',textTransform:'uppercase',marginBottom:8}}>Periodo</div>
@@ -395,9 +404,10 @@ export default function ClientApp({ user }) {
         </>)}
         {!ceLocale&&meseAttivo&&<div style={{textAlign:'center',padding:'60px 20px',color:'var(--text-03)',fontSize:13}}><div style={{fontSize:32,marginBottom:12}}>⏳</div>Caricamento dati…</div>}
         {mesi.length===0&&<div style={{textAlign:'center',padding:'60px 20px',color:'var(--text-03)',fontSize:13}}>Nessun periodo pubblicato ancora.</div>}
+        </>)}
       </main>
 
-      {drillVoce&&ceLocale&&<DrillModal voce={drillVoce} gruppi={ceLocale.gruppi} primaNotaRaw={datiMese?.prima_nota||[]} onClose={()=>setDrillVoce(null)}/>}
+      {drillVoce&&ceLocale&&vista==='ce'&&<DrillModal voce={drillVoce} gruppi={ceLocale.gruppi} primaNotaRaw={datiMese?.prima_nota||[]} onClose={()=>setDrillVoce(null)}/>}
     </div>
   )
 }
