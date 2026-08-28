@@ -1380,6 +1380,9 @@ export default function AdminApp({ user }) {
   const [datiStorico, setDatiStorico] = useState(null);  // dati del mese selezionato
   const [loadingStorico,    setLoadingStorico]    = useState(false);
   const [updatingPrimaNota, setUpdatingPrimaNota] = useState(false);
+  const [commentoStorico, setCommentoStorico] = useState("");
+  const [savingCommento, setSavingCommento] = useState(false);
+  const [commentoMsg, setCommentoMsg] = useState(null);
   const [updateMsg,         setUpdateMsg]         = useState(null);
   const xlsStorRef = useRef(null);
   const sb = getSupabase();
@@ -1547,9 +1550,27 @@ export default function AdminApp({ user }) {
     setMeseStorico(m);
     setLoadingStorico(true);
     setDatiStorico(null);
+    setCommentoMsg(null);
     const { data } = await sb.from('mesi').select('*').eq('id', m.id).single();
     setDatiStorico(data);
+    setCommentoStorico(data?.commento || "");
     setLoadingStorico(false);
+  }
+
+  async function salvaCommento() {
+    if (!meseStorico) return;
+    setSavingCommento(true); setCommentoMsg(null);
+    try {
+      const { error } = await sb.from('mesi')
+        .update({ commento: commentoStorico })
+        .eq('id', meseStorico.id);
+      if (error) throw error;
+      setDatiStorico(d => d ? {...d, commento: commentoStorico} : d);
+      setCommentoMsg({ ok:true, msg:"✓ Commento salvato. Il cliente lo vedrà nella dashboard." });
+    } catch(err) {
+      setCommentoMsg({ ok:false, msg:"Errore: " + (err.message||JSON.stringify(err)) });
+    }
+    setSavingCommento(false);
   }
 
   async function deleteMeseStorico(m) {
@@ -1813,6 +1834,35 @@ export default function AdminApp({ user }) {
                 {loadingStorico && (
                   <div style={{textAlign:"center",padding:"20px",color:C.textDim,fontSize:12}}>
                     Caricamento…
+                  </div>
+                )}
+
+                {datiStorico && (
+                  <div style={{marginBottom:16,padding:"14px 16px",background:C.surface,
+                    borderRadius:10,border:`1px solid ${C.border}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                      <div style={{fontSize:11,fontWeight:700,color:C.text}}>💬 Commento gestionale</div>
+                      <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        {commentoMsg && (
+                          <span style={{fontSize:10,color:commentoMsg.ok?C.green:C.red}}>{commentoMsg.msg}</span>
+                        )}
+                        <button onClick={salvaCommento} disabled={savingCommento} style={{
+                          background:C.accent,border:"none",borderRadius:6,color:"#fff",
+                          padding:"5px 14px",cursor:"pointer",fontSize:11,fontWeight:700,
+                          opacity:savingCommento?0.5:1}}>
+                          {savingCommento?"…":"Salva commento"}
+                        </button>
+                      </div>
+                    </div>
+                    <textarea value={commentoStorico} onChange={e=>setCommentoStorico(e.target.value)}
+                      placeholder="Scrivi o incolla qui il commento gestionale del mese. Il cliente lo vedrà nella sua dashboard, sopra i grafici."
+                      style={{width:"100%",minHeight:120,background:C.surfaceHigh,
+                        border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 12px",
+                        color:C.text,fontSize:12,fontFamily:"var(--font-ui)",lineHeight:1.5,
+                        outline:"none",resize:"vertical",boxSizing:"border-box"}}/>
+                    <div style={{fontSize:9,color:C.textDim,marginTop:5}}>
+                      Lascia vuoto per non mostrare alcun commento al cliente.
+                    </div>
                   </div>
                 )}
 
