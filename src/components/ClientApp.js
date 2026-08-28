@@ -293,12 +293,62 @@ export default function ClientApp({ user }) {
 
     VOCI_CE.forEach(drawRow)
 
-    // ═══ FOOTER ═══
+    const commentoTxt = (datiMese.commento||'').trim()
+    const nPagine = commentoTxt ? 2 : 1
+
+    // ═══ FOOTER pagina 1 ═══
     const fy=286
     doc.setDrawColor(230,233,240); doc.setLineWidth(0.3); doc.line(M,fy,W-M,fy)
     doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(150,155,165)
     doc.text('Documento riservato · Studio FNP · Uso interno',M,fy+4)
-    doc.text('Pagina 1 di 1',W-M,fy+4,{align:'right'})
+    doc.text('Pagina 1 di '+nPagine,W-M,fy+4,{align:'right'})
+
+    // ═══ PAGINA 2: COMMENTO GESTIONALE ═══
+    if (commentoTxt) {
+      doc.addPage()
+      // header ridotto
+      doc.setFillColor(26,39,68); doc.rect(0,0,W,20,'F')
+      doc.setFillColor(45,91,227); doc.rect(0,20,W,1.2,'F')
+      doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(255,255,255)
+      doc.text('Studio FNP',M,9)
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150,170,205)
+      doc.text('ELK SRL',M,15)
+      doc.text(datiMese.label+'  ·  '+localeLabel,W-M,9,{align:'right'})
+
+      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(26,39,68)
+      doc.text('Commento gestionale',M,34)
+      doc.setDrawColor(45,91,227); doc.setLineWidth(0.5); doc.line(M,37,M+40,37)
+
+      doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(40,45,55)
+      const maxW = W-2*M
+      const paragrafi = commentoTxt.split(/\n{2,}/)  // blocchi separati da riga vuota
+      let cy = 48
+      const lineH = 5.4
+      paragrafi.forEach(par => {
+        // singole righe dentro il blocco (a capo singoli)
+        const righeInterne = par.split(/\n/)
+        righeInterne.forEach((riga, idx) => {
+          const isTitolo = idx===0 && righeInterne.length>1 && riga.length < 40 && !riga.endsWith('.')
+          if (isTitolo) {
+            doc.setFont('helvetica','bold'); doc.setTextColor(26,39,68)
+          } else {
+            doc.setFont('helvetica','normal'); doc.setTextColor(40,45,55)
+          }
+          const wrapped = doc.splitTextToSize(riga, maxW)
+          wrapped.forEach(w => {
+            if (cy > 275) { doc.addPage(); cy = 24 }
+            doc.text(w, M, cy); cy += lineH
+          })
+        })
+        cy += 3  // spazio tra blocchi
+      })
+
+      // footer pagina 2
+      doc.setDrawColor(230,233,240); doc.setLineWidth(0.3); doc.line(M,fy,W-M,fy)
+      doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(150,155,165)
+      doc.text('Documento riservato · Studio FNP · Uso interno',M,fy+4)
+      doc.text('Pagina 2 di '+nPagine,W-M,fy+4,{align:'right'})
+    }
 
     doc.save(`CE_${datiMese.mese}_${activeLocale}.pdf`)
   }
@@ -347,7 +397,7 @@ export default function ClientApp({ user }) {
 
       <main style={{maxWidth:1100,margin:'0 auto',padding:'24px 20px'}}>
         {vista==='dashboard' ? (
-          <Dashboard activeLocale={activeLocale}/>
+          <Dashboard activeLocale={activeLocale} commento={datiMese?.commento||''} meseLabel={datiMese?.label||''}/>
         ) : (<>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:24}}>
           <div>
