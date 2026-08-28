@@ -167,6 +167,79 @@ export default function ClientApp({ user }) {
     })
   }
 
+  async function renderChartImage(config, width, height){
+    // crea un canvas offscreen, disegna il grafico, restituisce PNG dataURL
+    const canvas = document.createElement('canvas')
+    canvas.width = width; canvas.height = height
+    canvas.style.position='fixed'; canvas.style.left='-9999px'; canvas.style.top='0'
+    document.body.appendChild(canvas)
+    const chart = new window.Chart(canvas, { ...config,
+      options: { ...(config.options||{}), responsive:false, animation:false,
+        devicePixelRatio:2 } })
+    await new Promise(r=>setTimeout(r,60)) // lascia disegnare
+    const img = canvas.toDataURL('image/png')
+    chart.destroy(); document.body.removeChild(canvas)
+    return img
+  }
+
+  async function buildChartImages(){
+    // Carica Chart.js
+    if(!window.Chart){
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js')
+    }
+    let t=0; while(!window.Chart && t<100){ await new Promise(r=>setTimeout(r,50)); t++ }
+    if(!window.Chart) return null
+
+    // Carica tutti i mesi (per il grafico andamento) — solo mensili
+    const { data: lista } = await sb.from('mesi').select('*').order('data_fine',{ascending:true})
+    const mensili = (lista||[]).filter(m=>m.tipo!=='ytd').map(m=>{
+      const ce=calcolaTuttiCE(m.dati_ce||{},m.extra_scritture||[],m.alloc_conf||{},m.cespiti||{})
+      const loc=ce[activeLocale]||ce['tot']
+      return { label:(m.label||m.mese).split(' ')[0], vals:loc.vals }
+    })
+    const tick='#555', grid='rgba(0,0,0,0.08)'
+    const noAnim={responsive:false,animation:false,plugins:{legend:{display:false}}}
+
+    // 1. Andamento
+    const trend = await renderChartImage({
+      type:'line',
+      data:{ labels:mensili.map(m=>m.label), datasets:[
+        {label:'Ricavi',data:mensili.map(m=>Math.abs(m.vals[100]||0)),borderColor:'#2a78d6',backgroundColor:'#2a78d6',borderWidth:2,tension:0.3,pointRadius:2},
+        {label:'EBIT',data:mensili.map(m=>m.vals['EBIT']||0),borderColor:'#1baf7a',backgroundColor:'#1baf7a',borderWidth:2,tension:0.3,pointRadius:2},
+        {label:'Utile',data:mensili.map(m=>m.vals['RN']||0),borderColor:'#eda100',backgroundColor:'#eda100',borderWidth:2,borderDash:[4,2],tension:0.3,pointRadius:2},
+      ]},
+      options:{...noAnim, scales:{y:{ticks:{color:tick,font:{size:9}},grid:{color:grid}},x:{ticks:{color:tick,font:{size:9}},grid:{display:false}}}}
+    }, 900, 300)
+
+    // 2. Composizione costi (mese attivo)
+    const vAtt = (ce[activeLocale]||ce['tot']).vals
+    const costi = VOCI_CE.filter(v=>v.tipo==='input'&&typeof v.cod==='number')
+      .map(v=>({label:v.label,val:Math.abs(vAtt[v.cod]||0)})).filter(x=>x.val>0)
+      .sort((a,b)=>b.val-a.val).slice(0,8)
+    const costiImg = await renderChartImage({
+      type:'bar',
+      data:{ labels:costi.map(c=>c.label.length>20?c.label.slice(0,20)+'…':c.label),
+        datasets:[{data:costi.map(c=>c.val),backgroundColor:'#2a78d6',borderRadius:3,barThickness:14}]},
+      options:{...noAnim, indexAxis:'y', scales:{x:{ticks:{color:tick,font:{size:8}},grid:{color:grid}},y:{ticks:{color:tick,font:{size:8}},grid:{display:false}}}}
+    }, 440, 340)
+
+    // 3. Confronto locali (mese attivo)
+    const localiCC = LOCALI.filter(l=>l.cc!==null)
+    const ricaviLoc = localiCC.map(l=>{const lv=ce[l.id]?.vals||{};return Math.abs(lv[100]||0)})
+    const ebitLoc = localiCC.map(l=>{const lv=ce[l.id]?.vals||{};return lv['EBIT']||0})
+    const localiImg = await renderChartImage({
+      type:'bar',
+      data:{ labels:localiCC.map(l=>l.label),
+        datasets:[
+          {label:'Ricavi',data:ricaviLoc,backgroundColor:'#2a78d6',borderRadius:3,barThickness:26},
+          {label:'EBIT',data:ebitLoc,backgroundColor:'#1baf7a',borderRadius:3,barThickness:26},
+        ]},
+      options:{...noAnim, scales:{y:{ticks:{color:tick,font:{size:8}},grid:{color:grid}},x:{ticks:{color:tick,font:{size:9}},grid:{display:false}}}}
+    }, 440, 340)
+
+    return { trend, costi:costiImg, locali:localiImg }
+  }
+
   async function exportPDF(){
     if(!datiMese||!ceLocale)return
     try {
@@ -182,15 +255,19 @@ export default function ClientApp({ user }) {
         alert('Impossibile caricare la libreria PDF. Controlla la connessione e riprova.'); return
       }
 
+      // Genera le immagini dei grafici (se fallisce, PDF senza grafici)
+      let chartImgs = null
+      try { chartImgs = await buildChartImages() } catch(e) { chartImgs = null }
+
       const jsPDF = window.jspdf.jsPDF
       const doc = new jsPDF({orientation:'portrait',unit:'mm',format:'a4'})
-      generatePDF(doc, jsPDF)
+      generatePDF(doc, jsPDF, chartImgs)
     } catch(e) {
       alert('Errore generazione PDF: ' + (e.message||e))
     }
   }
 
-  function generatePDF(doc, jsPDF){
+  function generatePDF(doc, jsPDF, chartImgs){
     const localeLabel=LOCALI.find(l=>l.id===activeLocale)?.label||'Totale'
     const ricaviPdf=Math.abs(vals[100]||0)
     const W=210, M=14  // larghezza pagina, margine
@@ -294,7 +371,8 @@ export default function ClientApp({ user }) {
     VOCI_CE.forEach(drawRow)
 
     const commentoTxt = (datiMese.commento||'').trim()
-    const nPagine = commentoTxt ? 2 : 1
+    const hasCharts = chartImgs && chartImgs.trend
+    const nPagine = (commentoTxt || hasCharts) ? 2 : 1
 
     // ═══ FOOTER pagina 1 ═══
     const fy=286
@@ -303,8 +381,8 @@ export default function ClientApp({ user }) {
     doc.text('Documento riservato · Studio FNP · Uso interno',M,fy+4)
     doc.text('Pagina 1 di '+nPagine,W-M,fy+4,{align:'right'})
 
-    // ═══ PAGINA 2: COMMENTO GESTIONALE ═══
-    if (commentoTxt) {
+    // ═══ PAGINA 2: GRAFICI + COMMENTO ═══
+    if (commentoTxt || hasCharts) {
       doc.addPage()
       // header ridotto
       doc.setFillColor(26,39,68); doc.rect(0,0,W,20,'F')
@@ -315,35 +393,62 @@ export default function ClientApp({ user }) {
       doc.text('ELK SRL',M,15)
       doc.text(datiMese.label+'  ·  '+localeLabel,W-M,9,{align:'right'})
 
-      doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(26,39,68)
-      doc.text('Commento gestionale',M,34)
-      doc.setDrawColor(45,91,227); doc.setLineWidth(0.5); doc.line(M,37,M+40,37)
+      let cy = 30
 
-      doc.setFont('helvetica','normal'); doc.setFontSize(10.5); doc.setTextColor(40,45,55)
-      const maxW = W-2*M
-      const paragrafi = commentoTxt.split(/\n{2,}/)  // blocchi separati da riga vuota
-      let cy = 48
-      const lineH = 5.4
-      paragrafi.forEach(par => {
-        // singole righe dentro il blocco (a capo singoli)
-        const righeInterne = par.split(/\n/)
-        righeInterne.forEach((riga, idx) => {
-          const isTitolo = idx===0 && righeInterne.length>1 && riga.length < 40 && !riga.endsWith('.')
-          if (isTitolo) {
-            doc.setFont('helvetica','bold'); doc.setTextColor(26,39,68)
-          } else {
-            doc.setFont('helvetica','normal'); doc.setTextColor(40,45,55)
-          }
-          const wrapped = doc.splitTextToSize(riga, maxW)
-          wrapped.forEach(w => {
-            if (cy > 275) { doc.addPage(); cy = 24 }
-            doc.text(w, M, cy); cy += lineH
+      // ── GRAFICI ──
+      if (hasCharts) {
+        doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(26,39,68)
+        doc.text('Analisi grafica',M,cy)
+        doc.setDrawColor(45,91,227); doc.setLineWidth(0.5); doc.line(M,cy+2.5,M+30,cy+2.5)
+        cy += 7
+
+        // Grafico 1: andamento (largo)
+        const w1=W-2*M, h1=w1*(300/900)
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90,95,105)
+        doc.text('Andamento ricavi (blu), EBIT (verde) e utile netto (giallo)',M,cy)
+        cy += 3
+        doc.addImage(chartImgs.trend,'PNG',M,cy,w1,h1)
+        cy += h1 + 5
+
+        // Grafici 2 e 3 affiancati
+        const wHalf=(W-2*M-6)/2, hHalf=wHalf*(340/440)
+        doc.setFontSize(8); doc.setTextColor(90,95,105)
+        doc.text('Composizione costi',M,cy)
+        doc.text('Confronto locali',M+wHalf+6,cy)
+        cy += 3
+        doc.addImage(chartImgs.costi,'PNG',M,cy,wHalf,hHalf)
+        doc.addImage(chartImgs.locali,'PNG',M+wHalf+6,cy,wHalf,hHalf)
+        cy += hHalf + 8
+      }
+
+      // ── COMMENTO ──
+      if (commentoTxt) {
+        if (cy > 250) { doc.addPage(); cy = 24 }
+        doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(26,39,68)
+        doc.text('Commento gestionale',M,cy)
+        doc.setDrawColor(45,91,227); doc.setLineWidth(0.5); doc.line(M,cy+2.5,M+38,cy+2.5)
+        cy += 8
+
+        doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(40,45,55)
+        const maxW=W-2*M, lineH=5.1
+        const paragrafi=commentoTxt.split(/\n{2,}/)
+        paragrafi.forEach(par=>{
+          const righeInterne=par.split(/\n/)
+          righeInterne.forEach((riga,idx)=>{
+            const isTitolo = idx===0 && righeInterne.length>1 && riga.length<40 && !riga.endsWith('.')
+            doc.setFont('helvetica', isTitolo?'bold':'normal')
+            doc.setTextColor(isTitolo?26:40, isTitolo?39:45, isTitolo?68:55)
+            const wrapped=doc.splitTextToSize(riga,maxW)
+            wrapped.forEach(w=>{
+              if(cy>275){ doc.addPage(); cy=24 }
+              doc.text(w,M,cy); cy+=lineH
+            })
           })
+          cy += 3
         })
-        cy += 3  // spazio tra blocchi
-      })
+      }
 
-      // footer pagina 2
+      // footer pagina finale
       doc.setDrawColor(230,233,240); doc.setLineWidth(0.3); doc.line(M,fy,W-M,fy)
       doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(150,155,165)
       doc.text('Documento riservato · Studio FNP · Uso interno',M,fy+4)
