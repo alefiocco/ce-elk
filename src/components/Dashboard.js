@@ -23,7 +23,7 @@ function loadChartJs() {
 
 const fmtK = v => Math.abs(v) >= 1000 ? (v/1000).toFixed(0)+'k' : String(Math.round(v))
 
-export default function Dashboard({ activeLocale }) {
+export default function Dashboard({ activeLocale, commento, meseLabel }) {
   const [mesiData, setMesiData] = useState(null)
   const [loading, setLoading]   = useState(true)
   const trendRef  = useRef(null)
@@ -156,6 +156,17 @@ export default function Dashboard({ activeLocale }) {
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+      {commento && commento.trim() && (
+        <div style={{ ...cardStyle, borderLeft:'3px solid var(--blue)' }}>
+          <div style={{ ...titleStyle, display:'flex', alignItems:'center', gap:6 }}>
+            💬 Commento gestionale
+            {meseLabel && <span style={{ fontSize:11, fontWeight:400, color:'var(--text-03)' }}>· {meseLabel}</span>}
+          </div>
+          <div style={{ fontSize:13, lineHeight:1.65, color:'var(--text)', marginTop:10, whiteSpace:'pre-wrap' }}>
+            {commento}
+          </div>
+        </div>
+      )}
       <div style={cardStyle}>
         <div style={titleStyle}>Andamento ricavi, EBIT e utile netto</div>
         <div style={subStyle}>Periodi mensili · {mesiData.mensili.length} mesi</div>
