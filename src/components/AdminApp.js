@@ -1466,6 +1466,8 @@ export default function AdminApp({ user }) {
   const xlsStorRef = useRef(null);
   const sb = getSupabase();
   const txtContentRef = useRef(null);
+  const extraMappingRef = useRef({});
+  useEffect(() => { extraMappingRef.current = extraMapping; }, [extraMapping]);
 
   useEffect(() => {
     sb.from('mesi').select('id,mese,label,pubblicato_at')
@@ -1499,10 +1501,10 @@ export default function AdminApp({ user }) {
       txtContentRef.current = e.target.result;
       window._txtContentRef = e.target.result; // exposed for MappingPanel non-mapped detection
       const movimenti = parseTxt(e.target.result);
-      setGruppiRaw(aggregaPerCodice(movimenti, extraMapping));
+      setGruppiRaw(aggregaPerCodice(movimenti, extraMappingRef.current));
     };
     reader.readAsText(file,"UTF-8");
-  },[]);  // extraMapping volutamente escluso: usiamo il ref sotto
+  },[]);  // extraMapping letto via ref sempre aggiornato
 
   // Salva extraMapping su Supabase quando cambia (solo dopo il caricamento iniziale)
   useEffect(() => {
@@ -1549,21 +1551,21 @@ export default function AdminApp({ user }) {
     const reader = new FileReader();
     reader.onload = e => {
       const movimenti = parseTxt(e.target.result);
-      setGruppiAnnoPrec(aggregaPerCodice(movimenti, extraMapping));
+      setGruppiAnnoPrec(aggregaPerCodice(movimenti, extraMappingRef.current));
       setAnnoPrecName(file.name);
     };
     reader.readAsText(file, "UTF-8");
-  }, [extraMapping]);
+  }, []);
 
   const handleBilancio = useCallback((file) => {
     const reader = new FileReader();
     reader.onload = e => {
       const movimenti = parseTxt(e.target.result);
-      setGruppiBilancio(aggregaPerCodice(movimenti, extraMapping));
+      setGruppiBilancio(aggregaPerCodice(movimenti, extraMappingRef.current));
       setBilancioName(file.name);
     };
     reader.readAsText(file, "UTF-8");
-  }, [extraMapping]);
+  }, []);
 
   function handleExportJSON() {
     const label = meseFmt();
