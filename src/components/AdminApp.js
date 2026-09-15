@@ -147,10 +147,11 @@ function aggregaPerLocale(gr,ccL,ac,fc){
   return g;
 }
 const CODICI_BUDGET=[465,479];
-function calcolaCE(gi,extra){
+function calcolaCE(gi,extra,over410){
   const g={};
   for(const[k,v]of Object.entries(gi))g[k]={totale:v.totale,movimenti:[...v.movimenti]};
   for(const ex of extra){
+    if(ex.tipo==="personale_sost")continue; // gestito a parte via over410
     const key=String(ex.codGest);
     if(!g[key])g[key]={totale:0,movimenti:[]};
     g[key].totale+=ex.importo;
@@ -161,7 +162,10 @@ function calcolaCE(gi,extra){
   const v={};
   for(const voce of VOCI_CE){
     if(voce.tipo!=="input")continue;
-    if(CODICI_BUDGET.includes(voce.cod)&&bo[voce.cod]!==undefined){
+    if(voce.cod===410&&over410&&over410.movimenti){
+      v[410]=over410.totale;
+      g["410"]={totale:over410.totale,movimenti:over410.movimenti};
+    }else if(CODICI_BUDGET.includes(voce.cod)&&bo[voce.cod]!==undefined){
       v[voce.cod]=bo[voce.cod];
       const key=String(voce.cod);
       g[key]={totale:bo[voce.cod],movimenti:(g[key]?.movimenti||[]).filter(m=>m.isExtra)};
@@ -177,6 +181,27 @@ function calcolaCE(gi,extra){
   v["RN"]=v["RAI"]+v[800];
   return{vals:v,gruppi:g};
 }
+// Costruisce l'override del codice 410 (personale sostitutivo) per un dato locale.
+// ps: {dir10,dir20,dir30,amm}. ccLocale null = Totale. Restituisce {totale, movimenti} o null.
+function buildOver410(ps,ccLocale){
+  if(!ps)return null;
+  const d10=parseFloat(ps.dir10)||0, d20=parseFloat(ps.dir20)||0, d30=parseFloat(ps.dir30)||0, amm=parseFloat(ps.amm)||0;
+  const q=amm/3;
+  const mk=(desc,val)=>({conto:"PERS",descrizione:desc,dare:val<0?-val:0,avere:0,importoCE:val,isExtra:true});
+  if(ccLocale===null){
+    return {totale:-(d10+d20+d30+amm), movimenti:[
+      mk("Personale diretto Via IV Novembre",-d10),
+      mk("Personale diretto The Garden",-d20),
+      mk("Personale diretto Healky",-d30),
+      mk("Personale amministrativo (indiretto)",-amm),
+    ]};
+  }
+  const dir = ccLocale===10?d10 : ccLocale===20?d20 : ccLocale===30?d30 : 0;
+  return {totale:-(dir+q), movimenti:[
+    mk("Personale diretto locale",-dir),
+    mk("Quota amministrativo (1/3)",-q),
+  ]};
+}
 function calcolaPercRicavi(gr){
   const g=gr[String(100)];
   if(!g)return{10:1/3,20:1/3,30:1/3};
@@ -189,6 +214,7 @@ function calcolaPercRicavi(gr){
 function calcolaTuttiCE(gr,extra,ac,cespiti){
   const fc=calcolaFracCespiti(cespiti||{});
   const pr=calcolaPercRicavi(gr);
+  const ps=extra.find(ex=>ex.tipo==="personale_sost")||null;
   const res={};
   for(const locale of LOCALI){
     let gl,el;
@@ -197,10 +223,11 @@ function calcolaTuttiCE(gr,extra,ac,cespiti){
       el=[...extra.filter(ex=>ex.tipo!=="budget"),...extra.filter(ex=>ex.tipo==="budget")];
     }else{
       gl=aggregaPerLocale(gr,locale.cc,ac||{},fc);
-      el=extra.filter(ex=>{if(ex.tipo==="budget")return false;if(!ex.ccLocale)return true;return ex.ccLocale===locale.cc;}).map(ex=>({...ex}));
+      el=extra.filter(ex=>{if(ex.tipo==="budget")return false;if(ex.tipo==="personale_sost")return false;if(!ex.ccLocale)return true;return ex.ccLocale===locale.cc;}).map(ex=>({...ex}));
       for(const ex of extra.filter(ex=>ex.tipo==="budget"))el.push({...ex,importo:ex.importo*(pr[locale.cc]??1/3)});
     }
-    res[locale.id]=calcolaCE(gl,el);
+    const over410=buildOver410(ps,locale.cc);
+    res[locale.id]=calcolaCE(gl,el,over410);
   }
   return res;
 }
@@ -589,7 +616,7 @@ function LocaleSelect({ value, onChange }) {
   );
 }
 
-function RicorrentiPanel({ onSave, onClose }) {
+function RicorrentiPanel({ onSave, onClose, extra }) {
   const [tab, setTab] = useState("fatture");
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,background:"#000b",zIndex:200,
@@ -616,7 +643,7 @@ function RicorrentiPanel({ onSave, onClose }) {
         </div>
         <div style={{overflowY:"auto",padding:"20px 22px",flex:1}}>
           {tab==="fatture"   && <TabFatture   onSave={onSave} onClose={onClose}/>}
-          {tab==="personale" && <TabPersonale onSave={onSave} onClose={onClose}/>}
+          {tab==="personale" && <TabPersonale onSave={onSave} onClose={onClose} extra={extra}/>}
           {tab==="budget"    && <TabBudget    onSave={onSave} onClose={onClose}/>}
         </div>
       </div>
@@ -717,38 +744,90 @@ function TabFatture({ onSave, onClose }) {
   );
 }
 
-function TabPersonale({ onSave, onClose }) {
-  const [importo, setImporto] = useState("");
-  const [note, setNote] = useState("");
-  const [ccLocale, setCcLocale] = useState(10);
+function TabPersonale({ onSave, onClose, extra }) {
+  const esistente = (extra||[]).find(e=>e.tipo==="personale_sost");
+  const [dir10, setDir10] = useState(esistente?.dir10 ?? "");
+  const [dir20, setDir20] = useState(esistente?.dir20 ?? "");
+  const [dir30, setDir30] = useState(esistente?.dir30 ?? "");
+  const [amm,   setAmm]   = useState(esistente?.amm   ?? "");
+  const [note,  setNote]  = useState(esistente?.note  ?? "");
+
+  const pf = s => parseFloat(String(s).replace(",","."))||0;
+  const q = pf(amm)/3;
+  const totLocale = cc => cc===10?pf(dir10)+q : cc===20?pf(dir20)+q : pf(dir30)+q;
+  const totComplessivo = pf(dir10)+pf(dir20)+pf(dir30)+pf(amm);
 
   const handleSave = () => {
-    const imp = parseFloat(String(importo).replace(',','.'));
-    if (!imp || isNaN(imp)) return;
-    onSave({descrizione:"Ratei personale / TFR", note, codGest:410,
-      importo:imp, ccLocale, tipo:"ricorrente"});
+    // rimuove eventuale personale_sost precedente e ricrea
+    onSave({tipo:"personale_sost",
+      dir10:pf(dir10), dir20:pf(dir20), dir30:pf(dir30), amm:pf(amm),
+      note, descrizione:"Personale (dati consulente del lavoro)"});
     onClose();
   };
+
+  const NOMI = {10:"Via IV Novembre",20:"The Garden",30:"Healky"};
 
   return (
     <div>
       <div style={{color:C.textDim,fontSize:10,marginBottom:14,lineHeight:1.5}}>
-        Scrittura mensile su codice 410 – Costo del personale. Inserisci il totale di ratei e TFR
-        maturati nel mese e attribuiscili al locale di competenza.
+        Inserisci i costi del personale dal foglio del consulente del lavoro. Questi valori
+        <b style={{color:C.text}}> sostituiscono</b> il costo del personale contabile (codice 410).
+        L'amministrativo indiretto viene ripartito 1/3 su ciascun locale.
       </div>
-      <div style={{background:`${C.red}0a`,border:`1px solid ${C.red}33`,borderRadius:8,padding:"14px",marginBottom:16}}>
+
+      <div style={{background:`${C.accent}0a`,border:`1px solid ${C.accent}33`,borderRadius:8,padding:"14px",marginBottom:12}}>
+        <div style={{color:C.accent,fontSize:11,fontWeight:700,marginBottom:10}}>Costi diretti per locale</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-          <LocaleSelect value={ccLocale} onChange={setCcLocale}/>
-          <Field label="Importo ratei + TFR (€)">
-            <input style={inputStyle} type="text" inputMode="decimal" placeholder="Es. 1800 (costo) o -1800 (storno)" value={importo}
-              onChange={e=>setImporto(e.target.value)}/>
+          <Field label={NOMI[10]+" (€)"}>
+            <input style={inputStyle} type="text" inputMode="decimal" placeholder="Es. 14000" value={dir10}
+              onChange={e=>setDir10(e.target.value)}/>
           </Field>
-          <Field label="Note">
-            <input style={inputStyle} placeholder="Es. TFR marzo" value={note}
-              onChange={e=>setNote(e.target.value)}/>
+          <Field label={NOMI[20]+" (€)"}>
+            <input style={inputStyle} type="text" inputMode="decimal" placeholder="Es. 12000" value={dir20}
+              onChange={e=>setDir20(e.target.value)}/>
+          </Field>
+          <Field label={NOMI[30]+" (€)"}>
+            <input style={inputStyle} type="text" inputMode="decimal" placeholder="Es. 9000" value={dir30}
+              onChange={e=>setDir30(e.target.value)}/>
           </Field>
         </div>
       </div>
+
+      <div style={{background:`${C.amber}0a`,border:`1px solid ${C.amber}33`,borderRadius:8,padding:"14px",marginBottom:12}}>
+        <div style={{color:C.amber,fontSize:11,fontWeight:700,marginBottom:10}}>Personale amministrativo (indiretto)</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <Field label="Costo amministrativo (€)">
+            <input style={inputStyle} type="text" inputMode="decimal" placeholder="Es. 6000" value={amm}
+              onChange={e=>setAmm(e.target.value)}/>
+          </Field>
+          <Field label="Note">
+            <input style={inputStyle} placeholder="Es. luglio 2026" value={note}
+              onChange={e=>setNote(e.target.value)}/>
+          </Field>
+        </div>
+        <div style={{color:C.textDim,fontSize:9,marginTop:8}}>
+          Ripartito 1/3 per locale = {amm?fmt(q):"—"} € ciascuno
+        </div>
+      </div>
+
+      {(dir10||dir20||dir30||amm) && (
+        <div style={{background:C.surfaceHigh,borderRadius:8,padding:"12px 14px",marginBottom:16}}>
+          <div style={{color:C.textDim,fontSize:9,marginBottom:8,letterSpacing:"0.06em"}}>ANTEPRIMA COSTO PERSONALE (410)</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8}}>
+            {[10,20,30].map(cc=>(
+              <div key={cc}>
+                <div style={{color:C.textDim,fontSize:9}}>{NOMI[cc]}</div>
+                <div style={{fontFamily:"monospace",fontSize:13,color:C.red,fontWeight:700}}>{fmt(-totLocale(cc))}</div>
+              </div>
+            ))}
+            <div style={{borderLeft:`1px solid ${C.border}`,paddingLeft:8}}>
+              <div style={{color:C.textDim,fontSize:9}}>Totale</div>
+              <div style={{fontFamily:"monospace",fontSize:13,color:C.red,fontWeight:700}}>{fmt(-totComplessivo)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <SaveBar onClose={onClose} onSave={handleSave}/>
     </div>
   );
@@ -1633,7 +1712,7 @@ export default function AdminApp({ user }) {
     const fin = new Date(dataFine+"T12:00:00").toLocaleDateString("it-IT",{month:"short",year:"numeric"});
     return ini+"–"+fin;
   };
-  const nRicorrenti = extra.filter(e=>e.tipo==="ricorrente"||e.tipo==="budget").length;
+  const nRicorrenti = extra.filter(e=>e.tipo==="ricorrente"||e.tipo==="budget"||e.tipo==="personale_sost").length;
   const nGeneriche  = extra.filter(e=>!e.tipo).length;
 
   return (
@@ -1988,21 +2067,25 @@ export default function AdminApp({ user }) {
         {/* Badge scritture attive */}
         {extra.length > 0 && (
           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:16}}>
-            {extra.map((ex,i)=>(
+            {extra.map((ex,i)=>{
+              const isPers = ex.tipo==="personale_sost";
+              const totPers = isPers ? -((parseFloat(ex.dir10)||0)+(parseFloat(ex.dir20)||0)+(parseFloat(ex.dir30)||0)+(parseFloat(ex.amm)||0)) : 0;
+              const isRic = ex.tipo==="ricorrente"||ex.tipo==="budget"||isPers;
+              return (
               <div key={i} style={{
                 background:C.surfaceHigh,
-                border:`1px solid ${ex.tipo==="ricorrente"||ex.tipo==="budget"?C.amber+"66":C.border}`,
+                border:`1px solid ${isRic?C.amber+"66":C.border}`,
                 borderRadius:20,padding:"3px 9px",fontSize:9,color:C.textMid,
                 display:"flex",gap:6,alignItems:"center"}}>
-                <span style={{color:ex.tipo==="ricorrente"||ex.tipo==="budget"?C.amber:C.textDim}}>
-                  {ex.tipo==="ricorrente"?"🔄":ex.tipo==="budget"?"📊":"✎"}
+                <span style={{color:isRic?C.amber:C.textDim}}>
+                  {isPers?"👥":ex.tipo==="ricorrente"?"🔄":ex.tipo==="budget"?"📊":"✎"}
                 </span>
                 {ex.descrizione}
-                <span style={{color:col(ex.importo),fontWeight:700}}>{fmt(ex.importo)}</span>
+                <span style={{color:col(isPers?totPers:ex.importo),fontWeight:700}}>{fmt(isPers?totPers:ex.importo)}</span>
                 <span onClick={()=>setExtra(e=>e.filter((_,j)=>j!==i))}
                   style={{cursor:"pointer",color:C.textDim}}>×</span>
               </div>
-            ))}
+            )})}
           </div>
         )}
 
@@ -2146,7 +2229,10 @@ export default function AdminApp({ user }) {
       {showMapping && <MappingPanel extraMapping={extraMapping} setExtraMapping={setExtraMapping} gruppiRaw={gruppiRaw} onClose={()=>setShowMapping(false)}/>}
       {showCoeff && <CespitiPanel cespiti={cespiti} setCespiti={setCespiti} allocConf={allocConf} setAllocConf={setAllocConf} gruppiRaw={gruppiRaw} onClose={()=>setShowCoeff(false)}/>}
       {showExtra && <ExtraModal onSave={ex=>setExtra(e=>[...e,ex])} onClose={()=>setShowExtra(false)}/>}
-      {showRicorrenti && <RicorrentiPanel onSave={ex=>setExtra(e=>[...e,ex])} onClose={()=>setShowRicorrenti(false)}/>}
+      {showRicorrenti && <RicorrentiPanel extra={extra} onSave={ex=>setExtra(e=>{
+        if(ex.tipo==="personale_sost"){ return [...e.filter(x=>x.tipo!=="personale_sost"), ex]; }
+        return [...e,ex];
+      })} onClose={()=>setShowRicorrenti(false)}/>}
     </div>
   );
 }
