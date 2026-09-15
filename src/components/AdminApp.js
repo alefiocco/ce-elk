@@ -238,7 +238,8 @@ const col = n => n>=0 ? C.green : C.red;
 
 
 // ─── EXCEL PARSER ────────────────────────────────────────────────────────────
-async function parseExcelPrimaNota(file) {
+async function parseExcelPrimaNota(file, extraMap={}) {
+  const MAPPA = {...PIANO_CONTI, ...extraMap};
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = e => {
@@ -277,7 +278,7 @@ async function parseExcelPrimaNota(file) {
         for (const { row:r, numFattura, ragioneSociale, data } of righeArricchite) {
           const contoRaw = String(r[17]||"").replace(/[="'\s]/g,"");
           if (!contoRaw || !/^\d+$/.test(contoRaw)) continue;
-          const entry = PIANO_CONTI[contoRaw];
+          const entry = MAPPA[contoRaw];
           if (!entry || entry.cod >= 1000) continue;
           const codGest = entry.cod;
 
@@ -1539,7 +1540,7 @@ export default function AdminApp({ user }) {
   const handleXlsx = useCallback(async (file) => {
     setPrimaNotaErr(null);
     try {
-      const fatture = await parseExcelPrimaNota(file);
+      const fatture = await parseExcelPrimaNota(file, extraMappingRef.current);
       setPrimaNotaRaw(fatture);
       setPrimaNotaName(file.name);
     } catch(err) {
@@ -1670,7 +1671,7 @@ export default function AdminApp({ user }) {
   async function updatePrimaNota(meseId, file) {
     setUpdatingPrimaNota(true); setUpdateMsg(null);
     try {
-      const fatture = await parseExcelPrimaNota(file, extraMapping);
+      const fatture = await parseExcelPrimaNota(file, extraMappingRef.current);
       const { error } = await sb.from('mesi')
         .update({ prima_nota: fatture, pubblicato_at: new Date().toISOString() })
         .eq('id', meseId);
