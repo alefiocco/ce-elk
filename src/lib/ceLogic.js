@@ -4,7 +4,7 @@ export const LOCALI = [
   { id:"tot",  label:"Totale",   cc: null },
   { id:"via4", label:"Via IV Novembre",    cc: 10   },
   { id:"capp", label:"The Garden", cc: 20   },
-  { id:"Healky",  label:"Healky",      cc: 30   },
+  { id:"new",  label:"Healky",      cc: 30   },
 ];
 
 export const CC_LABELS = { 5:"Indiretti", 10:"Via IV Novembre", 20:"The Garden", 30:"Healky" };
@@ -207,12 +207,13 @@ export function aggregaPerLocale(gruppiRaw, ccLocale, allocConf, fracCespiti) {
 // ─── CALCOLO CE ───────────────────────────────────────────────────────────────
 const CODICI_BUDGET = [465, 479];
 
-export function calcolaCE(gruppiInput, extra) {
+export function calcolaCE(gruppiInput, extra, over410) {
   const g = {};
   for (const [k,v] of Object.entries(gruppiInput)) {
     g[k] = { totale:v.totale, movimenti:[...v.movimenti] };
   }
   for (const ex of extra) {
+    if (ex.tipo==="personale_sost") continue; // gestito a parte via over410
     const key = String(ex.codGest);
     if (!g[key]) g[key] = { totale:0, movimenti:[] };
     g[key].totale += ex.importo;
@@ -229,7 +230,10 @@ export function calcolaCE(gruppiInput, extra) {
   const v = {};
   for (const voce of VOCI_CE) {
     if (voce.tipo!=="input") continue;
-    if (CODICI_BUDGET.includes(voce.cod) && budgetOverride[voce.cod]!==undefined) {
+    if (voce.cod===410 && over410 && over410.movimenti) {
+      v[410] = over410.totale;
+      g["410"] = { totale:over410.totale, movimenti:over410.movimenti };
+    } else if (CODICI_BUDGET.includes(voce.cod) && budgetOverride[voce.cod]!==undefined) {
       v[voce.cod] = budgetOverride[voce.cod];
       const key = String(voce.cod);
       g[key] = { totale:budgetOverride[voce.cod], movimenti:(g[key]?.movimenti||[]).filter(m=>m.isExtra) };
@@ -250,6 +254,28 @@ export function calcolaCE(gruppiInput, extra) {
   return { vals:v, gruppi:g };
 }
 
+// Costruisce l'override del codice 410 (personale sostitutivo) per un dato locale.
+// ps: {dir10,dir20,dir30,amm}. ccLocale null = Totale. Restituisce {totale, movimenti} o null.
+export function buildOver410(ps, ccLocale) {
+  if (!ps) return null;
+  const d10=parseFloat(ps.dir10)||0, d20=parseFloat(ps.dir20)||0, d30=parseFloat(ps.dir30)||0, amm=parseFloat(ps.amm)||0;
+  const q = amm/3;
+  const mk = (desc,val)=>({conto:"PERS",descrizione:desc,dare:val<0?-val:0,avere:0,importoCE:val,isExtra:true});
+  if (ccLocale===null) {
+    return {totale:-(d10+d20+d30+amm), movimenti:[
+      mk("Personale diretto Via IV Novembre",-d10),
+      mk("Personale diretto The Garden",-d20),
+      mk("Personale diretto Healky",-d30),
+      mk("Personale amministrativo (indiretto)",-amm),
+    ]};
+  }
+  const dir = ccLocale===10?d10 : ccLocale===20?d20 : ccLocale===30?d30 : 0;
+  return {totale:-(dir+q), movimenti:[
+    mk("Personale diretto locale",-dir),
+    mk("Quota amministrativo (1/3)",-q),
+  ]};
+}
+
 export function calcolaPercRicavi(gruppiRaw) {
   const gruppo = gruppiRaw[String(100)];
   if (!gruppo) return {10:1/3,20:1/3,30:1/3};
@@ -263,6 +289,7 @@ export function calcolaPercRicavi(gruppiRaw) {
 export function calcolaTuttiCE(gruppiRaw, extra, allocConf, cespiti) {
   const fracCespiti = calcolaFracCespiti(cespiti||{});
   const percRicavi  = calcolaPercRicavi(gruppiRaw);
+  const ps = extra.find(ex=>ex.tipo==="personale_sost") || null;
   const results = {};
   for (const locale of LOCALI) {
     let gruppiLocale, extraLocale;
@@ -275,6 +302,7 @@ export function calcolaTuttiCE(gruppiRaw, extra, allocConf, cespiti) {
       extraLocale  = extra
         .filter(ex=>{
           if (ex.tipo==="budget") return false;
+          if (ex.tipo==="personale_sost") return false;
           if (!ex.ccLocale) return true;
           return ex.ccLocale===locale.cc;
         })
@@ -284,7 +312,8 @@ export function calcolaTuttiCE(gruppiRaw, extra, allocConf, cespiti) {
         extraLocale.push({...ex, importo:ex.importo*frac});
       }
     }
-    results[locale.id] = calcolaCE(gruppiLocale, extraLocale);
+    const over410 = buildOver410(ps, locale.cc);
+    results[locale.id] = calcolaCE(gruppiLocale, extraLocale, over410);
   }
   return results;
 }
