@@ -429,20 +429,28 @@ export default function ClientApp({ user }) {
         doc.setDrawColor(45,91,227); doc.setLineWidth(0.5); doc.line(M,cy+2.5,M+38,cy+2.5)
         cy += 8
 
-        doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(40,45,55)
-        const maxW=W-2*M, lineH=5.1
-        const paragrafi=commentoTxt.split(/\n{2,}/)
+        // normalizza caratteri che il font PDF standard non gestisce (meno unicode, apici tipografici)
+        const pulisci = s => s
+          .replace(/\u2212/g,'-')   // minus sign → hyphen
+          .replace(/[\u2018\u2019]/g,"'")
+          .replace(/[\u201C\u201D]/g,'"')
+          .replace(/\u2013/g,'-').replace(/\u2014/g,'-')
+        const maxW=W-2*M-1, lineH=5.1
+        const paragrafi=pulisci(commentoTxt).split(/\n{2,}/)
         paragrafi.forEach(par=>{
-          const righeInterne=par.split(/\n/)
+          const righeInterne=par.split(/\n/).filter(r=>r.trim().length>0)
           righeInterne.forEach((riga,idx)=>{
-            const isTitolo = idx===0 && righeInterne.length>1 && riga.length<40 && !riga.endsWith('.')
+            const isTitolo = idx===0 && righeInterne.length>1 && riga.trim().length<40 && !riga.trim().endsWith('.')
             doc.setFont('helvetica', isTitolo?'bold':'normal')
+            doc.setFontSize(isTitolo?10.5:10)
             doc.setTextColor(isTitolo?26:40, isTitolo?39:45, isTitolo?68:55)
-            const wrapped=doc.splitTextToSize(riga,maxW)
-            wrapped.forEach(w=>{
-              if(cy>275){ doc.addPage(); cy=24 }
-              doc.text(w,M,cy); cy+=lineH
-            })
+            const wrapped=doc.splitTextToSize(riga.trim(), maxW)
+            for(const w of wrapped){
+              if(cy>276){ doc.addPage(); cy=24 }
+              doc.text(w, M, cy)
+              cy+=lineH
+            }
+            if(isTitolo) cy+=0.5
           })
           cy += 3
         })
